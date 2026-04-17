@@ -43,6 +43,7 @@ import {
   Globe,
   Bell,
   ShieldCheck,
+  Clock,
   ChevronRight as ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -75,6 +76,44 @@ import { Mood, UserProfile, MoodEntry, JournalEntry, Goal, ChatMessage, MemoryEn
 import { chatWithSukoon, detectCrisis, transcribeAudio, detectPatterns, generateIntervention, structureDecision, generateWisdom } from "./services/gemini";
 
 // --- Components ---
+
+const THEMES = {
+  ocean: {
+    o1: "bg-blue-900/40", o2: "bg-sky-200/30", o3: "bg-teal-900/30",
+    d: { d1: 60, d2: 75, d3: 90 }
+  },
+  forest: {
+    o1: "bg-emerald-900/50", o2: "bg-green-200/30", o3: "bg-lime-900/30",
+    d: { d1: 50, d2: 80, d3: 70 }
+  },
+  nebula: {
+    o1: "bg-indigo-900/50", o2: "bg-purple-200/30", o3: "bg-rose-900/30",
+    d: { d1: 70, d2: 65, d3: 100 }
+  }
+};
+
+const EnhancedCalmingBackground = ({ sukoonMode, theme = 'ocean' }: { sukoonMode?: boolean, theme?: keyof typeof THEMES }) => {
+  const t = THEMES[theme] || THEMES.ocean;
+  return (
+    <div className={cn("fixed inset-0 z-0 pointer-events-none overflow-hidden select-none")}>
+      <motion.div 
+        animate={{ x: [0, 150, -50, 0], y: [0, 80, 120, 0], scale: [1, 1.4, 0.8, 1] }}
+        transition={{ duration: t.d.d1, repeat: Infinity, ease: "easeInOut" }}
+        className={cn("absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full blur-[150px] transition-colors duration-1000", sukoonMode ? "bg-slate-900/50" : t.o1)}
+      />
+      <motion.div 
+        animate={{ x: [0, -180, 80, 0], y: [0, 100, -60, 0], scale: [1, 1.5, 1.2, 1] }}
+        transition={{ duration: t.d.d2, repeat: Infinity, delay: 5, ease: "easeInOut" }}
+        className={cn("absolute top-[20%] -right-[15%] w-[65%] h-[65%] rounded-full blur-[130px] transition-colors duration-1000", sukoonMode ? "bg-slate-800/80" : t.o2)}
+      />
+      <motion.div 
+         animate={{ x: [0, 120, -150, 0], y: [0, -150, 70, 0], scale: [1, 1.2, 1.4, 1] }}
+         transition={{ duration: t.d.d3, repeat: Infinity, delay: 10, ease: "easeInOut" }}
+         className={cn("absolute -bottom-[20%] left-[20%] w-[60%] h-[60%] rounded-full blur-[140px] transition-colors duration-1000", sukoonMode ? "bg-purple-900/40" : t.o3)}
+      />
+    </div>
+  );
+};
 
 const CalmingBackground = ({ sukoonMode }: { sukoonMode?: boolean }) => (
   <div className={cn("fixed inset-0 z-0 pointer-events-none overflow-hidden select-none transition-colors duration-1000 bg-transparent")}>
@@ -428,12 +467,12 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
       </header>
 
       {mode === 'create' ? (
-        <Card className="space-y-6 overflow-hidden bg-white dark:bg-slate-900">
-          <div className="bg-primary-soft/5 dark:bg-emerald-900/10 p-4 rounded-2xl border border-primary-soft/10 dark:border-emerald-900/30">
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2">
+          <div className="bg-primary-soft/5 dark:bg-emerald-900/10 p-4 rounded-2xl border border-primary-soft/10 dark:border-emerald-900/30 mb-8">
             <p className="text-sm font-serif italic text-primary-strong dark:text-emerald-400">"{activePrompt}"</p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pl-[27px] pt-[28px] ml-[-3px] mr-[-3px] mt-[7px]">
             {(['text', 'audio', 'video'] as const).map(t => (
               <button 
                 key={t}
@@ -443,10 +482,23 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
                   type === t ? "bg-primary-soft border-primary-soft text-white" : "bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
                 )}
               >
-                {t}
+                {t === 'text' ? 'Write Note' : t === 'audio' ? 'Voice Message' : 'Video Message'}
               </button>
             ))}
           </div>
+
+          {(type === 'audio' || type === 'video') && (
+            <div className="flex flex-col items-center gap-4 py-4 mt-[7px]">
+              {type === 'video' && <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-2xl bg-black aspect-video" />}
+              <Button 
+                onClick={isRecording ? stopRecording : startRecording}
+                variant={isRecording ? "danger" : "primary"}
+              >
+                {isRecording ? "Stop Recording" : `Start ${type === 'audio' ? 'Voice' : 'Video'} Recording`}
+              </Button>
+              {isRecording && <div className="text-red-500 animate-pulse text-sm">● Recording...</div>}
+            </div>
+          )}
 
           {type === 'text' && (
             <textarea 
@@ -525,7 +577,7 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
           <Button onClick={save} disabled={saving || !content || tags.length === 0} className="w-full bg-primary-soft text-white h-14 rounded-2xl shadow-lg shadow-primary-soft/20">
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Store for Future Me"}
           </Button>
-        </Card>
+        </div>
       ) : (
         <div className="space-y-6">
           <div className="bg-primary-strong rounded-3xl p-8 text-white relative overflow-hidden">
@@ -945,7 +997,14 @@ const WallOfHope = ({ lang, uid, sukoonMode }: { lang: Language, uid: string, su
 
 const CalmSanctuary = ({ lang, uid, sukoonMode, setSukoonMode }: { lang: Language, uid: string, sukoonMode: boolean, setSukoonMode: (b: boolean) => void }) => {
   const [activeTab, setActiveTab] = useState<'sounds' | 'wall' | 'distract'>('wall');                
+  const [theme, setTheme] = useState<keyof typeof THEMES>('ocean');
   const t = translations[lang];
+
+  const generateTheme = () => {
+    const keys = Object.keys(THEMES) as (keyof typeof THEMES)[];
+    const nextTheme = keys[(keys.indexOf(theme) + 1) % keys.length];
+    setTheme(nextTheme);
+  };
 
   // Sukoon task states
   const [sukoonTask, setSukoonTask] = useState<'rhythm' | 'facts' | 'none'>('none');
@@ -962,12 +1021,17 @@ const CalmSanctuary = ({ lang, uid, sukoonMode, setSukoonMode }: { lang: Languag
   
   return (
     <div className={cn("space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700", sukoonMode ? "dark" : "")}>
+       <EnhancedCalmingBackground sukoonMode={sukoonMode} theme={theme} />
        <div className="dark:bg-slate-950 dark:text-slate-200 transition-colors duration-700 p-6 rounded-3xl">
          <header className="flex justify-between items-start mb-10">
            <div className="space-y-2">
              <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "font-mono" : "")}>{sukoonMode ? "Sukoon Mode" : "Sanctuary"}</h2>
              <p className="text-gray-500 font-medium">{sukoonMode ? "Low-stimulation micro-tasks" : "Connect and find peace"}</p>
            </div>
+           <Button onClick={generateTheme} variant="secondary" className="text-xs">
+             Generate New Ambience
+           </Button>
+         </header>
            <button 
               onClick={() => setSukoonMode(!sukoonMode)}
               className={cn(
@@ -978,7 +1042,6 @@ const CalmSanctuary = ({ lang, uid, sukoonMode, setSukoonMode }: { lang: Languag
            >
               {sukoonMode ? <CloudMoon className="w-6 h-6" /> : <Wind className="w-6 h-6" />}
            </button>
-         </header>
        
        <div className={cn("flex gap-2 p-1.5 rounded-3xl sticky top-0 z-20 overflow-x-auto", sukoonMode ? "bg-slate-900 border border-slate-800" : "bg-gray-100 backdrop-blur-sm bg-gray-100/80")}>
           {(['distract', 'sounds', 'wall'] as const).map(tab => (
@@ -1431,7 +1494,7 @@ function SukoonApp() {
 
   return (
     <div className={cn("min-h-screen pb-24 md:pb-0 md:pl-20 relative overflow-hidden transition-colors duration-700")}>
-      <CalmingBackground sukoonMode={sukoonMode} />
+      {/* <CalmingBackground sukoonMode={sukoonMode} />  <-- Removed from here */}
       {/* Sidebar / Bottom Nav */}
       <Navigation view={view} setView={setView} lang={lang} sukoonMode={sukoonMode} />
 
@@ -1472,6 +1535,10 @@ function SukoonApp() {
                sukoonMode={sukoonMode}
                setSukoonMode={setSukoonMode}
              />
+          )}
+          
+          {view === 'futureMe' && (
+              <FutureMeView messages={futureMeMessages} onPlay={(msg) => setActivePlaybackMessage(msg)} uid={user.uid} lang={lang} />
           )}
 
           {view === 'mood' && <MoodView onComplete={() => setView('home')} uid={user.uid} lang={lang} />}
@@ -2169,6 +2236,7 @@ function Navigation({ view, setView, lang, sukoonMode }: { view: string, setView
     { id: 'home', icon: Heart, label: t.home },
     { id: 'talk', icon: MessageSquare, label: t.talk },
     { id: 'calm', icon: CalmIcon, label: t.calm },
+    { id: 'futureMe', icon: Clock, label: t.futureMe },
     { id: 'settings', icon: Settings, label: t.settings },
   ];
 
