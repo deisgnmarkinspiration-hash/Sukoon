@@ -205,6 +205,19 @@ service cloud.firestore {
       allow delete: if isDocOwner();
     }
 
+    match /wallOfHope/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                    request.resource.data.text is string && 
+                    request.resource.data.text.size() <= 1000 &&
+                    request.resource.data.authorLang in ['en', 'hi', 'ur'] &&
+                    request.resource.data.createdAt == request.time;
+      allow update: if isAuthenticated() && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+                    request.resource.data.likes == resource.data.likes + 1;
+      allow delete: if isAdmin();
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

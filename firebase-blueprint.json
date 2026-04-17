@@ -94,6 +94,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "type", "content", "tags"]
+    },
+    "WallOfHopeMessage": {
+      "title": "WallOfHopeMessage",
+      "description": "Anonymous public messages of encouragement.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "authorLang": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "likes": { "type": "integer" }
+      },
+      "required": ["text", "authorLang"]
     }
   },
   "firestore": {
@@ -124,6 +136,10 @@
     "/futureMeMessages/{messageId}": {
       "schema": "FutureMeMessage",
       "description": "Messages recorded for the future self."
+    },
+    "/wallOfHope/{messageId}": {
+      "schema": "WallOfHopeMessage",
+      "description": "Publicly readable anonymous messages."
     }
   }
 }

@@ -18,6 +18,7 @@ import {
   User as UserIcon,
   Mic,
   MicOff,
+  Sun,
   Square,
   Zap,
   Brain,
@@ -38,7 +39,11 @@ import {
   Sparkles,
   Wind as CalmIcon,
   MessageSquare,
-  Repeat
+  Repeat,
+  Globe,
+  Bell,
+  ShieldCheck,
+  ChevronRight as ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format, startOfDay, subDays, isSameDay } from "date-fns";
@@ -63,15 +68,16 @@ import {
 } from "firebase/firestore";
 
 import { auth, db, loginWithGoogle, logout, OperationType, handleFirestoreError } from "./lib/firebase";
+import { GeminiQuotaExceededError } from "./services/gemini";
 import { cn } from "./lib/utils";
 import { translations, Language } from "./translations";
-import { Mood, UserProfile, MoodEntry, JournalEntry, Goal, ChatMessage, MemoryEntry, DecisionSession, Intervention, FutureMeMessage } from "./types";
-import { chatWithSukoon, detectCrisis, transcribeAudio, detectPatterns, generateIntervention, structureDecision } from "./services/gemini";
+import { Mood, UserProfile, MoodEntry, JournalEntry, Goal, ChatMessage, MemoryEntry, DecisionSession, Intervention, FutureMeMessage, WallOfHopeMessage } from "./types";
+import { chatWithSukoon, detectCrisis, transcribeAudio, detectPatterns, generateIntervention, structureDecision, generateWisdom } from "./services/gemini";
 
 // --- Components ---
 
-const CalmingBackground = () => (
-  <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
+const CalmingBackground = ({ sukoonMode }: { sukoonMode?: boolean }) => (
+  <div className={cn("fixed inset-0 z-0 pointer-events-none overflow-hidden select-none transition-colors duration-1000 bg-transparent")}>
     <motion.div 
       animate={{ 
         x: [0, 100, -50, 0], 
@@ -79,12 +85,11 @@ const CalmingBackground = () => (
         scale: [1, 1.2, 0.9, 1],
         rotate: [0, 45, -45, 0]
       }}
-      transition={{ 
-        duration: 40, 
-        repeat: Infinity, 
-        ease: "linear" 
-      }}
-      className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-primary-soft/10 blur-[120px]"
+      transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+      className={cn(
+        "absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full blur-[120px] transition-colors duration-1000",
+        sukoonMode ? "bg-indigo-900/40" : "bg-primary-soft/10"
+      )}
     />
     <motion.div 
       animate={{ 
@@ -93,13 +98,11 @@ const CalmingBackground = () => (
         scale: [1, 1.3, 1.1, 1],
         rotate: [0, -30, 30, 0]
       }}
-      transition={{ 
-        duration: 50, 
-        repeat: Infinity, 
-        delay: 2,
-        ease: "linear" 
-      }}
-      className="absolute top-[30%] -right-[15%] w-[55%] h-[55%] rounded-full bg-primary-soft/10 blur-[100px]"
+      transition={{ duration: 50, repeat: Infinity, delay: 2, ease: "linear" }}
+      className={cn(
+        "absolute top-[30%] -right-[15%] w-[55%] h-[55%] rounded-full blur-[100px] transition-colors duration-1000",
+        sukoonMode ? "bg-slate-800/60" : "bg-primary-soft/10"
+      )}
     />
     <motion.div 
       animate={{ 
@@ -107,13 +110,11 @@ const CalmingBackground = () => (
         y: [0, -120, 50, 0],
         scale: [1, 1.1, 1.2, 1]
       }}
-      transition={{ 
-        duration: 45, 
-        repeat: Infinity, 
-        delay: 5,
-        ease: "linear" 
-      }}
-      className="absolute -bottom-[15%] left-[15%] w-[45%] h-[45%] rounded-full bg-primary-strong/5 blur-[80px]"
+      transition={{ duration: 45, repeat: Infinity, delay: 5, ease: "linear" }}
+      className={cn(
+        "absolute -bottom-[15%] left-[15%] w-[45%] h-[45%] rounded-full blur-[80px] transition-colors duration-1000",
+        sukoonMode ? "bg-blue-900/30" : "bg-primary-strong/5"
+      )}
     />
   </div>
 );
@@ -121,32 +122,24 @@ const CalmingBackground = () => (
 const Button = ({ 
   children, 
   className, 
-  variant = 'primary', 
-  ...props 
+  variant = 'primary', ...props 
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' }) => {
   const variants = {
-    primary: "bg-primary-soft text-white hover:bg-primary-strong",
-    secondary: "bg-pastel-green text-primary-strong hover:bg-primary-soft/20",
-    danger: "bg-primary-strong/20 text-primary-strong hover:bg-primary-strong/30",
-    ghost: "bg-transparent text-gray-600 hover:bg-gray-100",
-    outline: "bg-transparent border border-gray-200 text-gray-600 hover:bg-gray-50"
+    primary: "bg-primary-soft text-white hover:bg-primary-strong dark:bg-primary-strong dark:hover:bg-primary-soft",
+    secondary: "bg-pastel-green text-primary-strong hover:bg-primary-soft/20 dark:bg-slate-800 dark:text-primary-soft",
+    danger: "bg-primary-strong/20 text-primary-strong hover:bg-primary-strong/30 dark:bg-red-900/20 dark:text-red-400",
+    ghost: "bg-transparent text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800",
+    outline: "bg-transparent border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
   };
   return (
-    <button 
-      className={cn(
-        "px-4 py-2 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2", 
-        variants[variant],
-        className
-      )} 
-      {...props}
-    >
+    <button className={cn("px-4 py-2 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2", variants[variant], className)} {...props}>
       {children}
     </button>
   );
 };
 
 const Card = ({ children, className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("bg-white rounded-3xl p-6 shadow-sm border border-primary-soft/5", className)} {...props}>
+  <div className={cn("bg-white dark:bg-slate-900/80 rounded-3xl p-6 shadow-sm border border-primary-soft/5 dark:border-slate-800/50 backdrop-blur-sm", className)} {...props}>
     {children}
   </div>
 );
@@ -170,7 +163,7 @@ const InterventionOverlay = ({ intervention, onComplete }: { intervention: Inter
   return (
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} 
-      className="fixed inset-0 z-[100] bg-primary-strong/95 backdrop-blur-xl flex items-center justify-center p-6 text-center text-white"
+      className="fixed inset-0 z-[100] bg-emerald-950/95 dark:bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 text-center text-white"
     >
       <div className="max-w-md w-full space-y-8">
         <div className="space-y-2">
@@ -211,8 +204,8 @@ const InterventionOverlay = ({ intervention, onComplete }: { intervention: Inter
 const InsightsView = ({ memories }: { memories: MemoryEntry[] }) => (
   <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
     <header className="space-y-1">
-      <h2 className="text-3xl font-serif">Emotional Patterns</h2>
-      <p className="text-gray-500 text-sm italic italic-small">Reflections from your recent journey.</p>
+      <h2 className="text-3xl font-serif dark:text-slate-100">Emotional Patterns</h2>
+      <p className="text-gray-500 dark:text-gray-400 text-sm italic italic-small">Reflections from your recent journey.</p>
     </header>
 
     <div className="grid gap-4">
@@ -274,8 +267,8 @@ const DecisionView = ({ decisions, onAnalyze }: { decisions: DecisionSession[], 
   return (
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="space-y-1">
-        <h2 className="text-3xl font-serif">Decision Clarity</h2>
-        <p className="text-gray-500 text-sm italic-small italic">STRUCTURE THINKING, DON'T OVERTHINK IT.</p>
+        <h2 className="text-3xl font-serif dark:text-slate-100">Decision Clarity</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm italic-small italic">STRUCTURE THINKING, DON'T OVERTHINK IT.</p>
       </header>
 
       <div className="space-y-4">
@@ -283,26 +276,26 @@ const DecisionView = ({ decisions, onAnalyze }: { decisions: DecisionSession[], 
           value={problem}
           onChange={(e) => setProblem(e.target.value)}
           placeholder="What's weighing on your mind?"
-          className="w-full bg-white rounded-3xl p-6 text-sm border focus:ring-2 focus:ring-emerald-500/20 outline-none min-h-[120px] shadow-sm"
+          className="w-full bg-white dark:bg-slate-900 rounded-3xl p-6 text-sm border border-gray-100 dark:border-slate-800 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none min-h-[120px] shadow-sm"
         />
-        <Button onClick={() => onAnalyze(problem)} disabled={!problem.trim()} className="w-full bg-emerald-600 text-white h-14 rounded-3xl">
+        <Button onClick={() => onAnalyze(problem)} disabled={!problem.trim()} className="w-full bg-emerald-600 dark:bg-emerald-700 text-white h-14 rounded-3xl">
           Analyze Perspectives
         </Button>
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 px-2">Past Sessions</h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 px-2">Past Sessions</h3>
         {decisions.length === 0 ? (
-          <p className="text-center text-gray-400 text-sm py-8">No past sessions yet.</p>
+          <p className="text-center text-gray-400 text-sm py-8 dark:text-gray-500">No past sessions yet.</p>
         ) : (
           decisions.map((d, i) => (
-            <Card key={i} className="group hover:border-emerald-200 cursor-pointer">
+            <Card key={i} className="group hover:border-emerald-200 dark:hover:border-slate-700 cursor-pointer">
               <div className="flex justify-between items-start gap-4">
                 <div className="space-y-1">
-                  <p className="font-bold line-clamp-1">{d.problem}</p>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest">{format(d.createdAt?.toDate() || new Date(), 'MMM d, yyyy')}</p>
+                  <p className="font-bold line-clamp-1 dark:text-slate-200">{d.problem}</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest">{format(d.createdAt?.toDate() || new Date(), 'MMM d, yyyy')}</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-500 transition-colors" />
+                <ChevronRight className="w-5 h-5 text-gray-300 dark:text-gray-600 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors" />
               </div>
             </Card>
           ))
@@ -335,10 +328,11 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
   const chunksRef = useRef<Blob[]>([]);
 
   const prompts = [
-    "What do you want to remind yourself when things feel too much?",
-    "What is something true about you that you forget when you're upset?",
-    "What helped you last time you felt like this?",
-    "Describe the peace you feel right now."
+    "How can you gently communicate your academic or career goals to your family when they seem to have a different vision?",
+    "When the pressure to succeed (academic/career) feels overwhelming, what small act helps you ground yourself?",
+    "Looking past familial and societal expectations, what is one thing *you* truly want for your future?",
+    "When you feel defined by your marks or your job title, what anchors you in your own worth?",
+    "What would you tell a younger version of yourself who feared 'log kya kahenge' (what people will say)?"
   ];
   const [activePrompt] = useState(prompts[Math.floor(Math.random() * prompts.length)]);
 
@@ -394,7 +388,8 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
   };
 
   const save = async () => {
-    if (!content.trim() || tags.length === 0) return;
+    // Media content is base64 string, text content is also string. Validate it's not empty.
+    if (!content || (type === 'text' && !content.trim()) || tags.length === 0) return;
     setSaving(true);
     try {
       await addDoc(collection(db, "futureMeMessages"), {
@@ -423,8 +418,8 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex justify-between items-end">
         <div className="space-y-1">
-          <h2 className="text-3xl font-serif">{t.futureMe}</h2>
-          <p className="text-gray-500 text-sm italic-small italic">{t.messagesFromSelf}</p>
+          <h2 className="text-3xl font-serif dark:text-slate-100">{t.futureMe}</h2>
+          <p className="text-gray-500 dark:text-gray-400 text-sm italic-small italic">{t.messagesFromSelf}</p>
         </div>
         <Button onClick={() => setMode(mode === 'list' ? 'create' : 'list')} variant="secondary">
           {mode === 'list' ? <Plus className="w-4 h-4" /> : <X className="w-4 h-4" />}
@@ -433,9 +428,9 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
       </header>
 
       {mode === 'create' ? (
-        <Card className="space-y-6 overflow-hidden">
-          <div className="bg-primary-soft/5 p-4 rounded-2xl border border-primary-soft/10">
-            <p className="text-sm font-serif italic text-primary-strong">"{activePrompt}"</p>
+        <Card className="space-y-6 overflow-hidden bg-white dark:bg-slate-900">
+          <div className="bg-primary-soft/5 dark:bg-emerald-900/10 p-4 rounded-2xl border border-primary-soft/10 dark:border-emerald-900/30">
+            <p className="text-sm font-serif italic text-primary-strong dark:text-emerald-400">"{activePrompt}"</p>
           </div>
 
           <div className="flex gap-2">
@@ -445,7 +440,7 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
                 onClick={() => { setType(t); setContent(""); }}
                 className={cn(
                   "flex-1 py-3 rounded-xl border text-sm font-medium transition-all capitalize",
-                  type === t ? "bg-primary-soft border-primary-soft text-white" : "bg-white border-gray-100 text-gray-500 hover:bg-gray-50"
+                  type === t ? "bg-primary-soft border-primary-soft text-white" : "bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
                 )}
               >
                 {t}
@@ -458,7 +453,7 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Write your heart out..."
-              className="w-full min-h-[150px] p-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-primary-soft/20 outline-none text-sm"
+              className="w-full min-h-[150px] p-4 rounded-2xl bg-gray-50 dark:bg-slate-800 border-none focus:ring-2 focus:ring-primary-soft/20 outline-none text-sm dark:text-gray-200"
             />
           )}
 
@@ -563,26 +558,26 @@ const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2">Your Archive</h3>
             {messages.length === 0 ? (
-              <Card className="text-center py-12 text-gray-400 space-y-4">
+              <Card className="text-center py-12 text-gray-400 space-y-4 dark:text-gray-500">
                 <Archive className="w-10 h-10 mx-auto opacity-20" />
                 <p className="text-sm">No messages stored yet. Create one while you feel stable.</p>
               </Card>
             ) : (
               <div className="grid gap-3">
                 {messages.map(m => (
-                  <Card key={m.id} className="p-4 hover:border-primary-soft/20 cursor-pointer group flex items-center justify-between" onClick={() => onPlay(m)}>
+                  <Card key={m.id} className="p-4 hover:border-primary-soft/20 dark:hover:border-slate-700 cursor-pointer group flex items-center justify-between" onClick={() => onPlay(m)}>
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-primary-soft/10 text-primary-soft flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-xl bg-primary-soft/10 text-primary-soft dark:bg-slate-800 dark:text-slate-400 flex items-center justify-center">
                         {m.type === 'video' ? <Video className="w-5 h-5" /> : (m.type === 'audio' ? <Volume2 className="w-5 h-5" /> : <BookOpen className="w-5 h-5" />)}
                       </div>
                       <div className="space-y-0.5">
                         <div className="flex gap-1 flex-wrap">
-                          {m.tags.map(t => <span key={t} className="text-[8px] font-bold bg-primary-soft/10 text-primary-strong px-1.5 py-0.5 rounded-full uppercase">{t}</span>)}
+                          {m.tags.map(t => <span key={t} className="text-[8px] font-bold bg-primary-soft/10 text-primary-strong dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded-full uppercase">{t}</span>)}
                         </div>
-                        <p className="text-[10px] text-gray-400 uppercase font-mono tracking-widest">{format(m.createdAt?.toDate() || new Date(), 'MMM d, yyyy')}</p>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-mono tracking-widest">{format(m.createdAt?.toDate() || new Date(), 'MMM d, yyyy')}</p>
                       </div>
                     </div>
-                    <Play className="w-4 h-4 text-gray-300 group-hover:text-primary-soft transition-colors" />
+                    <Play className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-primary-soft dark:group-hover:text-slate-400 transition-colors" />
                   </Card>
                 ))}
               </div>
@@ -668,6 +663,426 @@ const PlaybackOverlay = ({ message, onClose }: { message: FutureMeMessage, onClo
   );
 };
 
+// --- Unified Components ---
+
+const HomeTimeline = ({ 
+  profile, 
+  moods, 
+  journalEntries, 
+  onMoodClick,
+  onJournalClick,
+  onPlayFutureMe,
+  onSOS,
+  lang,
+  futureMeMessages
+}: {
+  profile: UserProfile;
+  moods: MoodEntry[];
+  journalEntries: JournalEntry[];
+  onMoodClick: () => void;
+  onJournalClick: () => void;
+  onPlayFutureMe: (msg: FutureMeMessage) => void;
+  onSOS: () => void;
+  lang: Language;
+  futureMeMessages: FutureMeMessage[];
+}) => {
+  const t = translations[lang];
+  
+  const timeline = [
+    ...moods.map(m => ({ ...m, type: 'mood' as const })),
+    ...journalEntries.map(j => ({ ...j, type: 'journal' as const }))
+  ].sort((a, b) => {
+    const tA = (a.timestamp instanceof Date ? a.timestamp : (a.timestamp as any)?.toDate?.()) || new Date(0);
+    const tB = (b.timestamp instanceof Date ? b.timestamp : (b.timestamp as any)?.toDate?.()) || new Date(0);
+    return tB.getTime() - tA.getTime();
+  });
+
+  return (
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <header className="flex justify-between items-start">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-serif font-bold text-gray-900 leading-tight">
+            {profile?.displayName?.split(' ')[0]},
+          </h1>
+          <p className="text-gray-500 font-medium">{t.howFeeling}</p>
+        </div>
+      </header>
+
+      {/* SOS Lifeline */}
+      <motion.button 
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={onSOS}
+        className="w-full bg-primary-strong text-white p-6 rounded-[32px] flex items-center justify-between shadow-xl shadow-primary-soft/10 group"
+      >
+        <div className="text-left">
+          <span className="text-[10px] uppercase tracking-widest font-bold opacity-70 text-white/80">{t.sos}</span>
+          <h2 className="text-2xl font-serif font-bold">{t.overwhelmed}</h2>
+        </div>
+        <div className="bg-white/20 p-3 rounded-2xl group-hover:rotate-12 transition-transform">
+          <AlertOctagon className="w-8 h-8" />
+        </div>
+      </motion.button>
+
+      {/* Primary Actions */}
+      <div className="grid grid-cols-2 gap-4">
+          <Card onClick={onMoodClick} className="bg-pastel-green dark:bg-emerald-900/20 border-0 p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
+             <div className="w-12 h-12 bg-white dark:bg-emerald-900/50 rounded-2xl flex items-center justify-center text-primary-soft dark:text-emerald-400 shadow-sm">
+                <Smile className="w-6 h-6" />
+             </div>
+             <span className="text-xs font-bold uppercase tracking-widest text-primary-strong dark:text-emerald-300">{t.home} & {t.saveMood}</span>
+          </Card>
+          <Card onClick={onJournalClick} className="bg-primary-soft/5 dark:bg-slate-800/50 border-0 p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-primary-soft/10 dark:hover:bg-slate-800 transition-colors">
+             <div className="w-12 h-12 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center text-primary-soft dark:text-slate-300 shadow-sm">
+                <BookOpen className="w-6 h-6" />
+             </div>
+             <span className="text-xs font-bold uppercase tracking-widest text-primary-soft dark:text-slate-400">{t.journal}</span>
+          </Card>
+      </div>
+
+      {/* Future Me Prompt Integrated */}
+      {futureMeMessages.length > 0 && (
+        <Card className="bg-primary-strong p-6 text-white border-0 overflow-hidden relative group">
+          <div className="relative z-10 space-y-4">
+             <div className="flex items-center gap-2">
+                <Anchor className="w-4 h-4 text-primary-soft" />
+                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary-soft/80">{t.futureMe}</span>
+             </div>
+             <p className="text-sm font-serif italic text-white/90">"{futureMeMessages[0].prompt || t.hearVoice}"</p>
+             <Button 
+               onClick={() => onPlayFutureMe(futureMeMessages[Math.floor(Math.random() * futureMeMessages.length)])}
+               className="bg-primary-soft text-white border-0 w-full h-12 rounded-xl"
+             >
+                <Play className="w-4 h-4 fill-current" /> {t.playLifeline}
+             </Button>
+          </div>
+          <Anchor className="absolute top-0 right-0 w-32 h-32 text-white/5 -rotate-12 transition-transform group-hover:scale-110" />
+        </Card>
+      )}
+
+      {/* Timeline */}
+      <div className="space-y-6">
+        <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-1">{t.appPreferences} • {t.home}</h3>
+        {timeline.length === 0 ? (
+          <Card className="text-center py-20 bg-white/50 dark:bg-slate-900/50 border-dashed border-gray-100 dark:border-slate-800">
+             <Calendar className="w-10 h-10 mx-auto text-gray-200 dark:text-gray-600 mb-4" />
+             <p className="text-gray-400 dark:text-gray-500 text-sm max-w-[200px] mx-auto">Your timeline of healing starts today. Record your first mood or thought.</p>
+          </Card>
+        ) : (
+          <div className="space-y-8 relative before:absolute before:left-[11px] before:top-2 before:bottom-0 before:w-[2px] before:bg-primary-soft/10 dark:before:bg-primary-strong/20">
+            {timeline.map((item, i) => (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
+                key={i} 
+                className="relative pl-10"
+              >
+                <div className={cn(
+                  "absolute left-0 top-1 w-[24px] h-[24px] rounded-full flex items-center justify-center z-10 shadow-sm",
+                  item.type === 'mood' ? "bg-pastel-green dark:bg-emerald-900/40 text-primary-soft dark:text-emerald-400" : "bg-primary-soft dark:bg-slate-700 text-white dark:text-slate-300"
+                )}>
+                   {item.type === 'mood' ? <MoodIcon mood={(item as MoodEntry).mood} className="w-3 h-3" /> : <BookOpen className="w-3 h-3" />}
+                </div>
+                
+                <div className="space-y-2">
+                   <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-2">
+                     {format(item.timestamp instanceof Date ? item.timestamp : (item.timestamp as any)?.toDate() || new Date(), 'HH:mm • MMM d')}
+                   </p>
+                   {item.type === 'mood' ? (
+                     <Card className={cn(
+                       "p-4 border-0 shadow-sm flex items-center gap-4 transition-transform hover:scale-[1.01]",
+                       (item as MoodEntry).mood === 'sad' || (item as MoodEntry).mood === 'anxious' ? "bg-primary-soft/5 dark:bg-slate-800/80" : "bg-white dark:bg-slate-800"
+                     )}>
+                        <div className="flex-1">
+                          <p className="font-bold text-gray-800 dark:text-slate-200 capitalize leading-none tracking-tight">{(item as MoodEntry).mood}</p>
+                          {(item as MoodEntry).note && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic leading-relaxed">"{(item as MoodEntry).note}"</p>}
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-primary-soft dark:text-slate-300">
+                          {(item as MoodEntry).intensity}
+                        </div>
+                     </Card>
+                   ) : (
+                     <Card className="p-5 border-0 shadow-sm bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                        <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{(item as JournalEntry).content}</p>
+                     </Card>
+                   )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Soundscapes = ({ lang, sukoonMode }: { lang: Language, sukoonMode?: boolean }) => {
+  const t = translations[lang];
+
+  const tracks = [
+    { id: 'white', title: "White Noise", yt: "nMfPqeZjc2c" },
+    { id: 'birds', title: "Morning Birds", yt: "eKFTSSKCzWA" },
+    { id: 'rain', title: "Heavy Rain", yt: "mPZkdNFkNps" },
+    { id: 'ocean', title: "Ocean Waves", yt: "f77SKdyn-1Y" }
+  ];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {tracks.map(track => (
+        <Card 
+          key={track.id} 
+          className={cn("p-4 overflow-hidden border", sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100")}
+        >
+          <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black relative mb-4">
+            <iframe 
+               width="100%" 
+               height="100%" 
+               src={`https://www.youtube.com/embed/${track.yt}?controls=0&showinfo=0&rel=0&autoplay=0&loop=1&playlist=${track.yt}`}
+               title={track.title} 
+               frameBorder="0" 
+               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+               className="opacity-70 pointer-events-auto"
+            />
+          </div>
+          <h3 className={cn("font-bold px-2", sukoonMode ? "text-slate-200 font-mono" : "text-gray-900")}>{track.title}</h3>
+        </Card>
+      ))}
+    </div>
+  );
+};
+
+const WallOfHope = ({ lang, uid, sukoonMode }: { lang: Language, uid: string, sukoonMode?: boolean }) => {
+  const [messages, setMessages] = useState<WallOfHopeMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const t = translations[lang];
+
+  useEffect(() => {
+    const q = query(collection(db, "wallOfHope"), limit(50));
+    return onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }) as WallOfHopeMessage);
+      setMessages(msgs.sort((a,b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)));
+    });
+  }, []);
+
+  const post = async () => {
+    if (!input.trim()) return;
+    setSending(true);
+    try {
+      await addDoc(collection(db, "wallOfHope"), {
+        text: input,
+        authorLang: lang,
+        likes: 0,
+        createdAt: serverTimestamp()
+      });
+      setInput("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const like = async (msg: WallOfHopeMessage) => {
+    try {
+      await setDoc(doc(db, "wallOfHope", msg.id!), { likes: (msg.likes || 0) + 1 }, { merge: true });
+    } catch (e) {}
+  };
+
+  return (
+    <div className="space-y-8 max-w-xl mx-auto">
+       <div className={cn("p-6 rounded-[32px] space-y-4", sukoonMode ? "bg-slate-900 border border-slate-800" : "bg-pastel-green")}>
+          <p className={cn("text-xs font-bold uppercase tracking-widest", sukoonMode ? "text-slate-500" : "text-primary-strong/60")}>{t.wallOfHope}</p>
+          <textarea 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={t.whatsOnMind}
+            className={cn("w-full rounded-2xl p-4 text-sm border-none focus:ring-2 outline-none min-h-[100px]", 
+              sukoonMode ? "bg-slate-800 text-slate-200 focus:ring-slate-700 placeholder:text-slate-500" : "bg-white/50 focus:ring-primary-soft/20 text-gray-900"
+            )}
+          />
+          <Button 
+            onClick={post} 
+            disabled={sending || !input.trim()} 
+            className={cn("w-full h-12 rounded-xl border-0", sukoonMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "")}
+          >
+             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Post Anonymously"}
+          </Button>
+       </div>
+
+       <div className="flex flex-col space-y-6">
+          {messages.map(m => (
+            <div key={m.id} className={cn("rounded-3xl p-6 border shadow-sm transition-all", sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-primary-soft/10")}>
+               <div className="flex items-center gap-3 mb-4">
+                 <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", sukoonMode ? "bg-slate-800" : "bg-gradient-to-tr from-primary-soft/50 to-primary-soft/20")}>
+                   <UserIcon className={cn("w-5 h-5", sukoonMode ? "text-slate-500" : "text-white")} />
+                 </div>
+                 <div>
+                   <p className={cn("text-sm font-bold", sukoonMode ? "text-slate-300 font-mono" : "text-gray-900")}>Anonymous</p>
+                   <p className={cn("text-xs uppercase tracking-widest", sukoonMode ? "text-slate-500 font-mono" : "text-gray-400 font-bold")}>{m.authorLang}</p>
+                 </div>
+               </div>
+               
+               <p className={cn("text-base leading-relaxed mb-6 pl-2", sukoonMode ? "text-slate-200" : "text-gray-700 italic")}>"{m.text}"</p>
+               
+               <div className={cn("flex items-center gap-4 pt-4 border-t", sukoonMode ? "border-slate-800" : "border-gray-50")}>
+                 <button onClick={() => like(m)} className={cn("flex items-center gap-1.5 text-sm transition-colors font-bold", 
+                    sukoonMode 
+                      ? (m.likes > 0 ? "text-red-400" : "text-slate-500 hover:text-slate-400") 
+                      : (m.likes > 0 ? "text-red-500" : "text-primary-soft/40 hover:text-primary-soft")
+                 )}>
+                    <Heart className={cn("w-4 h-4", m.likes > 0 && "fill-current")} />
+                    {m.likes || 0}
+                 </button>
+               </div>
+            </div>
+          ))}
+       </div>
+    </div>
+  );
+};
+
+const CalmSanctuary = ({ lang, uid, sukoonMode, setSukoonMode }: { lang: Language, uid: string, sukoonMode: boolean, setSukoonMode: (b: boolean) => void }) => {
+  const [activeTab, setActiveTab] = useState<'sounds' | 'wall' | 'distract'>('wall');                
+  const t = translations[lang];
+
+  // Sukoon task states
+  const [sukoonTask, setSukoonTask] = useState<'rhythm' | 'facts' | 'none'>('none');
+  const [clickCount, setClickCount] = useState(0);
+  const facts = [
+    "A day on Venus is longer than a year on Venus.",
+    "Wombat poop is cube-shaped so it doesn't roll away.",
+    "Bananas glow blue under black lights.",
+    "Octopuses have three hearts.",
+    "A cloud can weigh more than a million pounds.",
+    "Honey never spoils. You can eat 3000-year-old honey."
+  ];
+  const [factIndex, setFactIndex] = useState(0);
+  
+  return (
+    <div className={cn("space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700", sukoonMode ? "dark" : "")}>
+       <div className="dark:bg-slate-950 dark:text-slate-200 transition-colors duration-700 p-6 rounded-3xl">
+         <header className="flex justify-between items-start mb-10">
+           <div className="space-y-2">
+             <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "font-mono" : "")}>{sukoonMode ? "Sukoon Mode" : "Sanctuary"}</h2>
+             <p className="text-gray-500 font-medium">{sukoonMode ? "Low-stimulation micro-tasks" : "Connect and find peace"}</p>
+           </div>
+           <button 
+              onClick={() => setSukoonMode(!sukoonMode)}
+              className={cn(
+                  "p-3 rounded-full transition-all",
+                  sukoonMode ? "bg-slate-800 text-yellow-400" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              )}
+              title={sukoonMode ? "Exit Sukoon Mode" : "Enter Sukoon Mode"}
+           >
+              {sukoonMode ? <CloudMoon className="w-6 h-6" /> : <Wind className="w-6 h-6" />}
+           </button>
+         </header>
+       
+       <div className={cn("flex gap-2 p-1.5 rounded-3xl sticky top-0 z-20 overflow-x-auto", sukoonMode ? "bg-slate-900 border border-slate-800" : "bg-gray-100 backdrop-blur-sm bg-gray-100/80")}>
+          {(['distract', 'sounds', 'wall'] as const).map(tab => (
+            <button 
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "flex-1 py-3 px-4 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all",
+                activeTab === tab 
+                  ? (sukoonMode ? "bg-slate-800 text-slate-200 shadow-sm" : "bg-white text-primary-soft shadow-sm") 
+                  : (sukoonMode ? "text-slate-600 hover:text-slate-400" : "text-gray-400 hover:text-gray-600")
+              )}
+            >
+              {tab === 'distract' ? "Reset" : (t[tab as keyof typeof t] || tab)}
+            </button>
+          ))}
+       </div>
+
+       <motion.div 
+         key={activeTab}
+         initial={{ opacity: 0, y: 10 }}
+         animate={{ opacity: 1, y: 0 }}
+         className="min-h-[400px]"
+       >
+          {activeTab === 'distract' && (
+             <div className="animate-in fade-in">
+               {sukoonTask === 'none' ? (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                    <Card 
+                      onClick={() => { setClickCount(0); setSukoonTask('rhythm'); }}
+                      className={cn("p-8 cursor-pointer flex flex-col justify-between min-h-[160px] group transition-all", sukoonMode ? "bg-slate-900 border-slate-800 hover:border-slate-600" : "hover:border-primary-soft/30")}
+                    >
+                      <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center mb-4 transition-colors", sukoonMode ? "bg-slate-800 text-slate-400 group-hover:text-slate-200" : "bg-primary-soft/10 text-primary-soft")}>
+                         <div className="w-4 h-4 rounded-full bg-current animate-pulse" />
+                      </div>
+                      <h3 className={cn("font-bold tracking-tight", sukoonMode ? "font-mono" : "")}>Tap Rhythm</h3>
+                      <p className="text-xs text-gray-500 mt-2">A physical grounding task.</p>
+                    </Card>
+
+                    <Card 
+                      onClick={() => { setFactIndex(Math.floor(Math.random() * facts.length)); setSukoonTask('facts'); }}
+                      className={cn("p-8 cursor-pointer flex flex-col justify-between min-h-[160px] group transition-all", sukoonMode ? "bg-slate-900 border-slate-800 hover:border-slate-600" : "hover:border-primary-soft/30")}
+                    >
+                      <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center mb-4 transition-colors", sukoonMode ? "bg-slate-800 text-slate-400 group-hover:text-slate-200" : "bg-primary-soft/10 text-primary-soft")}>
+                         <Zap className="w-5 h-5" />
+                      </div>
+                      <h3 className={cn("font-bold tracking-tight", sukoonMode ? "font-mono" : "")}>Random Fact</h3>
+                      <p className="text-xs text-gray-500 mt-2">Change the subject.</p>
+                    </Card>
+                 </div>
+               ) : sukoonTask === 'rhythm' ? (
+                 <div className="space-y-12 flex flex-col items-center justify-center min-h-[50vh] py-12 animate-in fade-in">
+                    <div className="text-center space-y-4">
+                      <h2 className={cn("text-2xl", sukoonMode ? "font-mono" : "font-serif")}>Tap Rhythm</h2>
+                      <p className="text-gray-500 text-sm">Tap the circle 10 times at a clear, steady pace.</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (clickCount >= 9) {
+                          setClickCount(0);
+                          setSukoonTask('none');
+                        } else {
+                          setClickCount(c => c + 1);
+                        }
+                      }}
+                      className={cn(
+                        "w-32 h-32 rounded-full flex items-center justify-center active:scale-95 transition-all shadow-xl overflow-hidden relative",
+                        sukoonMode ? "border border-slate-700 bg-slate-800 active:bg-slate-700 shadow-black/50" : "border-2 border-primary-soft/20 bg-white active:bg-primary-soft/5 shadow-primary-soft/10"
+                      )}
+                    >
+                      <div className={cn("absolute inset-0", sukoonMode ? "bg-slate-600/30" : "bg-primary-soft/10")} style={{ height: `${(clickCount / 10) * 100}%`, bottom: 0, top: 'auto', transition: 'height 0.2s' }} />
+                      <span className={cn("text-3xl relative z-10", sukoonMode ? "font-mono text-slate-400" : "font-bold text-primary-soft")}>{10 - clickCount}</span>
+                    </button>
+                    <button onClick={() => setSukoonTask('none')} className="text-gray-400 hover:text-gray-600 text-xs uppercase tracking-widest">Quit</button>
+                 </div>
+               ) : (
+                 <div className="space-y-12 flex flex-col items-center justify-center min-h-[50vh] py-12 animate-in fade-in">
+                    <div className="text-center space-y-4">
+                     <h2 className={cn("text-2xl", sukoonMode ? "font-mono" : "font-serif")}>Random Fact</h2>
+                   </div>
+                   <div className={cn("max-w-xs text-center p-8 rounded-3xl min-h-[200px] flex items-center justify-center", sukoonMode ? "border border-slate-800 bg-slate-900/50" : "border border-primary-soft/10 bg-white")}>
+                     <p className={cn("text-lg leading-relaxed", sukoonMode ? "text-slate-300 font-serif" : "text-gray-700")}>{facts[factIndex]}</p>
+                   </div>
+                   <div className="flex flex-col items-center gap-4">
+                     <button 
+                       onClick={() => setFactIndex((i) => (i + 1) % facts.length)}
+                       className={cn("px-6 py-3 rounded-2xl transition-colors font-medium shadow-sm", sukoonMode ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700" : "bg-primary-soft text-white hover:bg-primary-strong")}
+                     >
+                       Next Fact
+                     </button>
+                     <button onClick={() => setSukoonTask('none')} className="text-gray-400 hover:text-gray-600 text-xs uppercase tracking-widest mt-4">Quit</button>
+                   </div>
+                 </div>
+               )}
+             </div>
+          )}
+          {activeTab === 'sounds' && <Soundscapes lang={lang} sukoonMode={sukoonMode} />}
+          {activeTab === 'wall' && <WallOfHope lang={lang} uid={uid} sukoonMode={sukoonMode} />}
+       </motion.div>
+       </div>
+     </div>
+  )
+}
+
 // --- Error Boundary ---
 
 interface ErrorBoundaryProps {
@@ -723,8 +1138,10 @@ export default function App() {
 function SukoonApp() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [sukoonMode, setSukoonMode] = useState(false);
+  const [lang, setLang] = useState<Language>('en');
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'home' | 'talk' | 'calm' | 'future-me' | 'journal' | 'growth' | 'settings'>('home');
+  const [view, setView] = useState<'home' | 'talk' | 'calm' | 'settings' | 'mood' | 'journal'>('home');
   const [isCrisisModalOpen, setIsCrisisModalOpen] = useState(false);
 
   // Data
@@ -756,15 +1173,15 @@ function SukoonApp() {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        // Fetch profile
         const path = `users/${u.uid}`;
         try {
           const docRef = doc(db, "users", u.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            const p = docSnap.data() as UserProfile;
+            setProfile(p);
+            if (p.preferredLanguage) setLang(p.preferredLanguage as Language);
           } else {
-            // New user - default profile
             const newProfile: UserProfile = {
               uid: u.uid,
               email: u.email || "",
@@ -775,14 +1192,18 @@ function SukoonApp() {
             };
             await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
             setProfile(newProfile);
+            setLang("en");
           }
         } catch (err) {
+          console.error("Profile Fetch Error:", err);
           handleFirestoreError(err, OperationType.GET, path);
+        } finally {
+          setLoading(false);
         }
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsubscribe;
   }, []);
@@ -794,41 +1215,81 @@ function SukoonApp() {
     const moodsQ = query(
       collection(db, "moods"), 
       where("uid", "==", user.uid), 
-      orderBy("timestamp", "desc"),
-      limit(10)
+      limit(20)
     );
     const moodUnsub = onSnapshot(moodsQ, (snap) => {
-      setMoods(snap.docs.map(d => ({ id: d.id, ...d.data() }) as MoodEntry));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as MoodEntry)
+        .sort((a, b) => {
+          const tA = a.timestamp instanceof Date ? a.timestamp : (a.timestamp as any)?.toDate?.() || new Date(0);
+          const tB = b.timestamp instanceof Date ? b.timestamp : (b.timestamp as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setMoods(sorted.slice(0, 10));
     }, (err) => handleFirestoreError(err, OperationType.LIST, "moods"));
 
     const journalQ = query(
       collection(db, "journal"),
       where("uid", "==", user.uid),
-      orderBy("timestamp", "desc"),
-      limit(5)
+      limit(10)
     );
     const journalUnsub = onSnapshot(journalQ, (snap) => {
-      setJournalEntries(snap.docs.map(d => ({ id: d.id, ...d.data() }) as JournalEntry));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as JournalEntry)
+        .sort((a, b) => {
+          const tA = a.timestamp instanceof Date ? a.timestamp : (a.timestamp as any)?.toDate?.() || new Date(0);
+          const tB = b.timestamp instanceof Date ? b.timestamp : (b.timestamp as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setJournalEntries(sorted.slice(0, 5));
     }, (err) => handleFirestoreError(err, OperationType.LIST, "journal"));
 
-    const goalsQ = query(collection(db, "goals"), where("uid", "==", user.uid), orderBy("createdAt", "desc"));
+    const goalsQ = query(collection(db, "goals"), where("uid", "==", user.uid));
     const goalsUnsub = onSnapshot(goalsQ, (snap) => {
-      setGoals(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Goal));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Goal)
+        .sort((a, b) => {
+          const tA = a.createdAt instanceof Date ? a.createdAt : (a.createdAt as any)?.toDate?.() || new Date(0);
+          const tB = b.createdAt instanceof Date ? b.createdAt : (b.createdAt as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setGoals(sorted);
     }, (err) => handleFirestoreError(err, OperationType.LIST, "goals"));
 
-    const memoriesQ = query(collection(db, "memories"), where("uid", "==", user.uid), orderBy("lastTriggered", "desc"), limit(5));
+    const memoriesQ = query(collection(db, "memories"), where("uid", "==", user.uid), limit(20));
     const memoriesUnsub = onSnapshot(memoriesQ, (snap) => {
-      setMemories(snap.docs.map(d => ({ id: d.id, ...d.data() }) as MemoryEntry));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as MemoryEntry)
+        .sort((a, b) => {
+          const tA = a.lastTriggered instanceof Date ? a.lastTriggered : (a.lastTriggered as any)?.toDate?.() || new Date(0);
+          const tB = b.lastTriggered instanceof Date ? b.lastTriggered : (b.lastTriggered as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setMemories(sorted.slice(0, 5));
     }, (err) => handleFirestoreError(err, OperationType.LIST, "memories"));
 
-    const decisionsQ = query(collection(db, "decisions"), where("uid", "==", user.uid), orderBy("createdAt", "desc"), limit(5));
+    const decisionsQ = query(collection(db, "decisions"), where("uid", "==", user.uid), limit(20));
     const decisionsUnsub = onSnapshot(decisionsQ, (snap) => {
-      setDecisions(snap.docs.map(d => ({ id: d.id, ...d.data() }) as DecisionSession));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as DecisionSession)
+        .sort((a, b) => {
+          const tA = a.createdAt instanceof Date ? a.createdAt : (a.createdAt as any)?.toDate?.() || new Date(0);
+          const tB = b.createdAt instanceof Date ? b.createdAt : (b.createdAt as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setDecisions(sorted.slice(0, 5));
     }, (err) => handleFirestoreError(err, OperationType.LIST, "decisions"));
 
-    const futureMeQ = query(collection(db, "futureMeMessages"), where("uid", "==", user.uid), orderBy("createdAt", "desc"));
+    const futureMeQ = query(collection(db, "futureMeMessages"), where("uid", "==", user.uid));
     const futureMeUnsub = onSnapshot(futureMeQ, (snap) => {
-      setFutureMeMessages(snap.docs.map(d => ({ id: d.id, ...d.data() }) as FutureMeMessage));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as FutureMeMessage)
+        .sort((a, b) => {
+          const tA = a.createdAt instanceof Date ? a.createdAt : (a.createdAt as any)?.toDate?.() || new Date(0);
+          const tB = b.createdAt instanceof Date ? b.createdAt : (b.createdAt as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setFutureMeMessages(sorted);
     }, (err) => handleFirestoreError(err, OperationType.LIST, "futureMeMessages"));
 
     return () => {
@@ -865,7 +1326,7 @@ function SukoonApp() {
           analysis: analysis.analysis,
           createdAt: serverTimestamp()
         });
-        setView('growth');
+        setView('home');
       }
     } catch (err) {
       console.error(err);
@@ -925,33 +1386,54 @@ function SukoonApp() {
     }
   }, [user, moods.length]);
 
-  const lang = profile?.preferredLanguage as Language || "en";
   const tr = translations[lang];
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FDFCF9] gap-4 relative overflow-hidden">
+      <div className="h-screen w-screen flex flex-col items-center justify-center gap-4 relative overflow-hidden transition-colors">
         <CalmingBackground />
         <div className="relative z-10">
-          <Loader2 className="w-8 h-8 animate-spin text-primary-soft" />
-          <div className="absolute inset-0 blur-xl bg-primary-soft/20 animate-pulse" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary-soft dark:text-emerald-500" />
+          <div className="absolute inset-0 blur-xl bg-primary-soft/20 dark:bg-emerald-500/20 animate-pulse" />
         </div>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 animate-pulse relative z-10">{tr.findingPeace}</p>
+        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 dark:text-gray-500 animate-pulse relative z-10">{tr.findingPeace}</p>
       </div>
     );
   }
 
-  if (!user) return <div className="min-h-screen relative overflow-hidden"><CalmingBackground /><LoginView /></div>;
+  if (!user) return <div className="min-h-screen relative overflow-hidden transition-colors"><CalmingBackground /><LoginView /></div>;
+
+  if (!profile && !showConfigError) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center gap-4 relative overflow-hidden transition-colors">
+        <CalmingBackground />
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-soft dark:text-emerald-500" />
+          <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 dark:text-gray-500 animate-pulse">Synchronizing Profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (profile && !profile.onboardingComplete) {
-    return <div className="min-h-screen relative overflow-hidden"><CalmingBackground /><OnboardingView profile={profile} onComplete={() => setProfile(p => p ? ({ ...p, onboardingComplete: true }) : null)} /></div>;
+    return (
+      <div className="min-h-screen relative overflow-hidden transition-colors">
+        <CalmingBackground />
+        <OnboardingView 
+          profile={profile} 
+          lang={lang}
+          setLang={setLang}
+          onComplete={() => setProfile(p => p ? ({ ...p, onboardingComplete: true }) : null)} 
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFCF9] text-gray-900 pb-24 md:pb-0 md:pl-20 relative overflow-hidden">
-      <CalmingBackground />
+    <div className={cn("min-h-screen pb-24 md:pb-0 md:pl-20 relative overflow-hidden transition-colors duration-700")}>
+      <CalmingBackground sukoonMode={sukoonMode} />
       {/* Sidebar / Bottom Nav */}
-      <Navigation view={view} setView={setView} lang={lang} />
+      <Navigation view={view} setView={setView} lang={lang} sukoonMode={sukoonMode} />
 
       {showConfigError && (
         <div className="fixed top-0 left-0 right-0 z-[100] bg-orange-50 border-b border-orange-100 p-3 flex items-center justify-center gap-4 animate-in slide-in-from-top duration-500">
@@ -968,189 +1450,35 @@ function SukoonApp() {
       <main className="max-w-4xl mx-auto p-6 md:p-12 relative z-10">
         <AnimatePresence mode="wait">
           {view === 'home' && (
-            <motion.div 
-              key="home"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-10"
-            >
-              <header className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <h1 className="text-4xl font-serif font-bold text-gray-900 leading-tight">
-                    {profile?.displayName?.split(' ')[0]},
-                  </h1>
-                  <p className="text-gray-500 font-medium">{tr.howFeeling}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => setView('settings')} className="rounded-2xl h-12 w-12 p-0 bg-white border-gray-100">
-                    <Settings className="w-5 h-5 text-gray-400" />
-                  </Button>
-                </div>
-              </header>
-
-              {/* SOS - The visceral lifeline */}
-              <motion.button 
-                whileHover={{ scale: 1.01, boxShadow: "0 20px 25px -5px rgb(74 139 113 / 0.1), 0 8px 10px -6px rgb(74 139 113 / 0.1)" }}
-                whileTap={{ scale: 0.99 }}
-                onClick={startPanicMode}
-                className="w-full bg-primary-strong text-white p-6 rounded-[32px] flex items-center justify-between group transition-all shadow-xl shadow-primary-soft/10"
-              >
-                <div className="text-left">
-                  <span className="text-[10px] uppercase tracking-widest font-bold opacity-70 text-white/80">{tr.sos}</span>
-                  <h2 className="text-2xl font-serif font-bold">{tr.overwhelmed}</h2>
-                </div>
-                <motion.div 
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="bg-white/20 p-3 rounded-2xl group-hover:rotate-12 transition-transform"
-                >
-                  <AlertOctagon className="w-8 h-8" />
-                </motion.div>
-              </motion.button>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Future Me - Primary Lifeline */}
-                <motion.div
-                  whileHover={{ y: -5 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
-                  <Card className="bg-pastel-green border-0 p-8 flex flex-col justify-between min-h-[220px] shadow-sm relative overflow-hidden group h-full">
-                    <div className="relative z-10">
-                      <h3 className="text-2xl font-serif font-bold mb-2 text-primary-strong">{tr.myAnchor}</h3>
-                      <p className="text-primary-soft/80 text-sm leading-relaxed mb-6">
-                        {tr.hearVoice}
-                      </p>
-                    </div>
-                    <div className="relative z-10 flex gap-2">
-                      {futureMeMessages.length > 0 ? (
-                        <Button 
-                          onClick={() => setActivePlaybackMessage(futureMeMessages[Math.floor(Math.random() * futureMeMessages.length)])}
-                          className="bg-primary-soft text-white hover:bg-primary-strong w-full h-14 rounded-2xl border-0 shadow-lg shadow-primary-soft/20"
-                        >
-                          <Play className="w-5 h-5 fill-current" />
-                          {tr.playLifeline}
-                        </Button>
-                      ) : (
-                        <Button onClick={() => setView('future-me')} className="bg-primary-soft text-white hover:bg-primary-strong w-full h-14 rounded-2xl border-0 shadow-lg shadow-primary-soft/20">
-                          {tr.recordAnchor}
-                        </Button>
-                      )}
-                    </div>
-                    <Anchor className="absolute top-0 right-0 w-44 h-44 text-primary-soft/10 -rotate-12 translate-x-12 -translate-y-12 transition-transform group-hover:scale-110 duration-500" />
-                  </Card>
-                </motion.div>
-
-                {/* Talk It Out */}
-                <motion.div
-                  whileHover={{ y: -5 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
-                  <Card className="bg-pastel-green border-0 p-8 flex flex-col justify-between min-h-[220px] shadow-sm relative overflow-hidden group h-full">
-                    <div className="relative z-10">
-                      <h3 className="text-2xl font-serif font-bold mb-2 text-primary-strong">{tr.letItOut}</h3>
-                      <p className="text-primary-soft/80 text-sm leading-relaxed mb-6">
-                        {tr.noJudgment}
-                      </p>
-                    </div>
-                    <Button onClick={() => setView('talk')} className="relative z-10 bg-primary-soft text-white hover:bg-primary-strong w-full h-14 rounded-2xl border-0 shadow-lg shadow-primary-soft/20">
-                      <MessageSquare className="w-5 h-5" />
-                      {tr.talkItOut}
-                    </Button>
-                    <MessageCircle className="absolute top-0 right-0 w-44 h-44 text-primary-soft/10 -rotate-12 translate-x-12 -translate-y-12 transition-transform group-hover:scale-110 duration-500" />
-                  </Card>
-                </motion.div>
-              </div>
-
-              {/* Quick Relief - High engagement, low effort */}
-              <section className="bg-pastel-green border border-primary-soft/10 p-8 rounded-[40px] flex flex-col md:flex-row items-center gap-8 text-center md:text-left shadow-sm">
-                <div className="bg-white p-4 rounded-3xl shadow-sm">
-                  <Timer className="w-10 h-10 text-primary-soft" />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <h3 className="text-xl font-bold text-primary-strong">{tr.needCalm}</h3>
-                  <p className="text-primary-soft/70 text-sm font-medium">{tr.guidedBreathing}</p>
-                </div>
-                <Button 
-                  onClick={async () => {
-                    const intervention = await generateIntervention("anxiety", "quick reset requested from home");
-                    if (intervention) setActiveIntervention(intervention);
-                  }}
-                  className="bg-primary-soft text-white hover:bg-primary-strong h-14 px-8 rounded-2xl w-full md:w-auto border-0"
-                >
-                  {tr.startReset}
-                </Button>
-              </section>
-
-              {/* Silent mode toggle */}
-              <div className="flex justify-center">
-                <button 
-                  onClick={toggleSilentMode}
-                  className={cn(
-                    "flex items-center gap-3 px-6 py-3 rounded-full border transition-all shadow-sm",
-                    profile?.silentMode ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-400 border-gray-100 hover:border-primary-soft/30 hover:text-primary-soft"
-                  )}
-                >
-                  <CloudMoon className={cn("w-5 h-5", profile?.silentMode && "text-primary-soft")} />
-                  <span className="text-xs font-bold uppercase tracking-widest leading-none">
-                    {profile?.silentMode ? tr.silentModeActive : tr.goSilent}
-                  </span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {view === 'talk' && <ChatView profile={profile!} onNewIntervention={(i) => setActiveIntervention(i)} lang={lang} />}
-          {view === 'calm' && (
-             <div className="p-6 space-y-12">
-               <header className="space-y-2">
-                 <h2 className="text-4xl font-serif">{tr.calm}</h2>
-                 <p className="text-gray-500">{tr.guidedBreathing}</p>
-               </header>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { label: tr.overwhelmed, mood: "panic" },
-                    { label: tr.needCalm, mood: "insomnia" },
-                    { label: "Endless scrolling", mood: "distracted" },
-                    { label: "Heavy chest", mood: "heavy" }
-                  ].map(item => (
-                    <Card key={item.label} className="p-8 hover:border-primary-soft/30 cursor-pointer group" onClick={async () => {
-                      const inter = await generateIntervention(item.mood as any, item.label);
-                      if (inter) setActiveIntervention(inter);
-                    }}>
-                       <div className="flex justify-between items-center">
-                         <span className="text-lg font-bold">{item.label}</span>
-                         <Plus className="w-5 h-5 text-primary-soft opacity-0 group-hover:opacity-100 transition-opacity" />
-                       </div>
-                    </Card>
-                  ))}
-               </div>
-               <MoodView onComplete={() => setView('home')} uid={user.uid} lang={lang} />
-             </div>
-          )}
-          {view === 'journal' && <JournalView uid={user.uid} lang={lang} />}
-          {view === 'future-me' && (
-            <FutureMeView 
-              messages={futureMeMessages} 
-              onPlay={(msg) => setActivePlaybackMessage(msg)}
-              uid={user.uid}
+            <HomeTimeline 
+              profile={profile!}
+              moods={moods}
+              journalEntries={journalEntries}
+              futureMeMessages={futureMeMessages}
+              onMoodClick={() => setView('mood')}
+              onJournalClick={() => setView('journal')}
+              onPlayFutureMe={(msg) => setActivePlaybackMessage(msg)}
+              onSOS={startPanicMode}
               lang={lang}
             />
           )}
-          {view === 'settings' && <SettingsView profile={profile!} onLogout={() => logout()} lang={lang} />}
-          {view === 'growth' && (
-            <div className="p-6 space-y-12">
-               <header className="space-y-2">
-                 <h2 className="text-4xl font-serif">{tr.healingGraph}</h2>
-                 <p className="text-gray-500">{tr.untanglingPatterns}</p>
-               </header>
-               <InsightsView memories={memories} />
-               <div className="border-t pt-12">
-                 <h3 className="text-xl font-bold mb-6">{tr.untangleThinking}</h3>
-                 <DecisionView decisions={decisions} onAnalyze={onAnalyzeDecision} />
-               </div>
-            </div>
+
+          {view === 'talk' && <ChatView profile={profile!} onNewIntervention={(i) => setActiveIntervention(i)} lang={lang} />}
+          
+          {view === 'calm' && (
+             <CalmSanctuary 
+               lang={lang} 
+               uid={user.uid} 
+               sukoonMode={sukoonMode}
+               setSukoonMode={setSukoonMode}
+             />
           )}
+
+          {view === 'mood' && <MoodView onComplete={() => setView('home')} uid={user.uid} lang={lang} />}
+          
+          {view === 'journal' && <JournalView uid={user.uid} lang={lang} title="Express Yourself" onSave={() => setView('home')} />}
+          
+          {view === 'settings' && <SettingsView profile={profile!} onLogout={() => logout()} lang={lang} setLang={setLang} />}
         </AnimatePresence>
       </main>
 
@@ -1179,23 +1507,59 @@ function SukoonApp() {
 // --- Views ---
 
 function LoginView() {
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      if (err.code === 'auth/cancelled-popup-request') {
+        setError("Login popup was closed. Please try again.");
+      } else if (err.code === 'auth/popup-blocked') {
+        setError("Popup was blocked by your browser. Please allow popups for this site.");
+      } else {
+        setError(err.message || "An unexpected error occurred during login.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-transparent relative z-10">
       <div className="w-full max-w-md text-center space-y-8">
         <div className="space-y-2">
-          <div className="bg-primary-soft w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-primary-soft/20">
-            <Heart className="text-white w-8 h-8" />
+          <div className="bg-primary-soft dark:bg-emerald-800 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-primary-soft/20 dark:shadow-emerald-900/40">
+            <Heart className="text-white w-8 h-8 flex-shrink-0" />
           </div>
-          <h1 className="text-4xl font-serif font-bold text-gray-900 tracking-tight">Sukoon</h1>
-          <p className="text-gray-500">Your companion for mental wellness and inner peace.</p>
+          <h1 className="text-4xl font-serif font-bold text-gray-900 dark:text-slate-100 tracking-tight">Sukoon</h1>
+          <p className="text-gray-500 dark:text-gray-400">Your companion for mental wellness and inner peace.</p>
         </div>
         
         <div className="space-y-4 mt-8">
-          <Button onClick={loginWithGoogle} className="w-full py-4 text-lg bg-white border border-gray-200 text-gray-700 shadow-sm hover:bg-gray-50">
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5 mr-2" referrerPolicy="no-referrer" />
-            Continue with Google
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-xl text-xs text-red-600 dark:text-red-400 font-medium animate-in fade-in duration-300">
+              {error}
+            </div>
+          )}
+          <Button 
+            onClick={handleLogin} 
+            disabled={loading}
+            className="w-full py-4 text-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            ) : (
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5 mr-2" referrerPolicy="no-referrer" />
+            )}
+            {loading ? "Connecting..." : "Continue with Google"}
           </Button>
-          <p className="text-xs text-gray-400 px-6">
+          <p className="text-xs text-gray-400 dark:text-gray-500 px-6">
             By continuing, you agree to our terms. This is a wellness tool, not a medical device.
           </p>
         </div>
@@ -1204,8 +1568,7 @@ function LoginView() {
   );
 }
 
-function OnboardingView({ profile, onComplete }: { profile: UserProfile, onComplete: () => void }) {
-  const [lang, setLang] = useState<"en" | "hi" | "ur">("en");
+function OnboardingView({ profile, lang, setLang, onComplete }: { profile: UserProfile, lang: Language, setLang: (l: Language) => void, onComplete: () => void }) {
   const [step, setStep] = useState(1);
 
   const finish = async () => {
@@ -1232,8 +1595,8 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
       >
         {step === 1 ? (
           <>
-            <h2 className="text-2xl font-bold">{translations[lang].pickLanguage}</h2>
-            <p className="text-gray-500">{translations[lang].home === 'होम' ? 'हम चाहते हैं कि सुकून घर जैसा लगे।' : (translations[lang].home === 'ہوم' ? 'ہم چاہتے ہیں کہ سکون گھر جیسا محسوس ہو۔' : 'We want Sukoon to feel like home.')}</p>
+            <h2 className="text-2xl font-bold dark:text-slate-100">{translations[lang].pickLanguage}</h2>
+            <p className="text-gray-500 dark:text-gray-400">{translations[lang].home === 'होम' ? 'हम चाहते हैं कि सुकून घर जैसा लगे।' : (translations[lang].home === 'ہوم' ? 'ہم چاہتے ہیں کہ سکون گھر جیسا محسوس ہو۔' : 'We want Sukoon to feel like home.')}</p>
             <div className="grid grid-cols-1 gap-3">
               {(["en", "hi", "ur"] as const).map(l => (
                   <button 
@@ -1241,11 +1604,11 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
                     onClick={() => setLang(l)}
                     className={cn(
                       "p-4 rounded-2xl border-2 text-left transition-all",
-                      lang === l ? "border-primary-soft bg-pastel-green" : "border-gray-100 bg-white"
+                      lang === l ? "border-primary-soft bg-pastel-green dark:bg-emerald-900/20" : "border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900"
                     )}
                   >
-                    <p className="font-bold capitalize">{l === 'en' ? 'English' : (l === 'hi' ? 'Hindi (हिंदी)' : 'Urdu (اردو)')}</p>
-                    <p className="text-xs text-gray-500">{l === 'en' ? 'Default' : (l === 'hi' ? 'Suno, samjho aur bolo' : 'Suniye, samjhiye aur boliye')}</p>
+                    <p className="font-bold capitalize dark:text-slate-200">{l === 'en' ? 'English' : (l === 'hi' ? 'Hindi (हिंदी)' : 'Urdu (اردو)')}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{l === 'en' ? 'Default' : (l === 'hi' ? 'Suno, samjho aur bolo' : 'Suniye, samjhiye aur boliye')}</p>
                   </button>
               ))}
             </div>
@@ -1253,18 +1616,18 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
           </>
         ) : (
           <>
-            <h2 className="text-2xl font-bold">{translations[lang].privacyPurpose}</h2>
-            <div className="space-y-4 text-gray-600">
+            <h2 className="text-2xl font-bold dark:text-slate-100">{translations[lang].privacyPurpose}</h2>
+            <div className="space-y-4 text-gray-600 dark:text-gray-400">
               <div className="flex gap-4">
-                <ShieldAlert className="shrink-0 text-primary-soft" />
+                <ShieldAlert className="shrink-0 text-primary-soft dark:text-emerald-400" />
                 <p className="text-sm">{translations[lang].privacyDescription}</p>
               </div>
               <div className="flex gap-4">
-                <Heart className="shrink-0 text-primary-soft" />
+                <Heart className="shrink-0 text-primary-soft dark:text-emerald-400" />
                 <p className="text-sm">{translations[lang].aiCompanionDescription}</p>
               </div>
               <div className="flex gap-4">
-                <ShieldAlert className="shrink-0 text-primary-soft" />
+                <ShieldAlert className="shrink-0 text-primary-soft dark:text-emerald-400" />
                 <p className="text-sm">{translations[lang].crisisRedirectDescription}</p>
               </div>
             </div>
@@ -1381,7 +1744,11 @@ function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, 
         if (intervention) onNewIntervention(intervention);
       }
     } catch (err) {
-      console.error(err);
+      if (err instanceof GeminiQuotaExceededError) {
+        setMessages(prev => [...prev, { role: "model", parts: [{ text: "It seems I've reached my daily limit for conversations today. I'm taking a short rest, but please know you're not alone. I'll be back fresh tomorrow. Why not try one of the calming rituals in the 'Calm' section?" }] }]);
+      } else {
+        console.error(err);
+      }
     } finally {
       setSending(false);
     }
@@ -1389,33 +1756,33 @@ function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, 
 
   return (
     <div className="fixed inset-0 bg-transparent z-50 flex flex-col md:static md:inset-auto md:h-[80vh]">
-      <header className="p-4 border-b flex items-center justify-between bg-white/80 backdrop-blur shrink-0">
+      <header className="p-4 border-b dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur shrink-0">
         <div className="flex flex-col">
-          <span className="font-serif font-bold text-lg">{t.talkItOut}</span>
+          <span className="font-serif font-bold text-lg dark:text-slate-100">{t.talkItOut}</span>
           <span className="text-[10px] text-primary-soft uppercase tracking-widest font-bold">{t.safeSpace}</span>
         </div>
         <div className="flex items-center gap-2">
            <div className="w-2 h-2 rounded-full bg-primary-soft animate-pulse" />
-           <span className="text-[10px] uppercase font-bold text-gray-400">{t.listenerActive}</span>
+           <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500">{t.listenerActive}</span>
         </div>
       </header>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center py-12 space-y-4">
-            <div className="bg-pastel-green w-20 h-20 rounded-[32px] flex items-center justify-center mx-auto rotate-3">
+            <div className="bg-pastel-green dark:bg-slate-800 w-20 h-20 rounded-[32px] flex items-center justify-center mx-auto rotate-3">
               <MessageSquare className="w-10 h-10 text-primary-soft -rotate-3" />
             </div>
             <div className="max-w-xs mx-auto space-y-1">
-              <h3 className="font-serif font-bold text-xl">{t.listening}</h3>
-              <p className="text-sm text-gray-400 leading-relaxed">{t.ventScream}</p>
+              <h3 className="font-serif font-bold text-xl dark:text-slate-200">{t.listening}</h3>
+              <p className="text-sm text-gray-400 dark:text-gray-500 leading-relaxed">{t.ventScream}</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center pt-4">
               {[t.overwhelmed, t.hardDay, t.justVent].map(suggestion => (
                 <button 
                   key={suggestion}
                   onClick={() => setInput(suggestion)}
-                  className="px-4 py-2 bg-white border border-gray-100 rounded-full text-xs text-gray-500 hover:border-primary-soft/20 transition-all font-medium"
+                  className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full text-xs text-gray-500 dark:text-gray-400 hover:border-primary-soft/20 dark:hover:border-slate-600 transition-all font-medium"
                 >
                   {suggestion}
                 </button>
@@ -1427,7 +1794,7 @@ function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, 
           <div key={i} className={cn("flex", m.role === 'user' ? "justify-end" : "justify-start")}>
             <div className={cn(
               "max-w-[85%] p-4 rounded-[24px] relative",
-              m.role === 'user' ? "bg-primary-soft text-white rounded-tr-none" : "bg-white border rounded-tl-none shadow-sm"
+              m.role === 'user' ? "bg-primary-soft text-white rounded-tr-none" : "bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-tl-none shadow-sm dark:text-slate-200"
             )}>
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.parts[0].text}</p>
             </div>
@@ -1435,7 +1802,7 @@ function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, 
         ))}
         {sending && (
           <div className="flex justify-start">
-            <div className="bg-white border rounded-[20px] rounded-tl-none p-4 shadow-sm">
+            <div className="bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-[20px] rounded-tl-none p-4 shadow-sm">
               <Loader2 className="w-4 h-4 animate-spin text-primary-soft" />
             </div>
           </div>
@@ -1443,11 +1810,11 @@ function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, 
         <div ref={scrollRef} />
       </div>
 
-      <div className="p-4 bg-white border-t shrink-0">
+      <div className="p-4 bg-white dark:bg-slate-950 border-t dark:border-slate-800 shrink-0">
         {isRecording && (
           <div className="flex items-center justify-center mb-4 gap-4 bg-primary-soft/10 p-3 rounded-2xl animate-pulse">
             <div className="w-2 h-2 rounded-full bg-primary-soft" />
-            <span className="text-[10px] font-bold text-primary-strong uppercase tracking-widest">Listening...</span>
+            <span className="text-[10px] font-bold text-primary-strong dark:text-primary-soft uppercase tracking-widest">Listening...</span>
           </div>
         )}
         <div className="flex gap-2 max-w-4xl mx-auto items-end">
@@ -1458,7 +1825,7 @@ function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, 
               placeholder={transcribing ? "Listening to your voice..." : "Let it out..."}
               rows={1}
               disabled={transcribing}
-              className="w-full bg-gray-50 rounded-[20px] pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-soft/20 resize-none min-h-[48px] max-h-[120px] border-transparent transition-all"
+              className="w-full bg-gray-50 dark:bg-slate-900 dark:text-slate-200 rounded-[20px] pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-soft/20 resize-none min-h-[48px] max-h-[120px] border-transparent transition-all"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -1583,7 +1950,7 @@ function MoodView({ onComplete, uid, lang }: { onComplete: () => void, uid: stri
   );
 }
 
-function JournalView({ uid, lang }: { uid: string, lang: Language }) {
+function JournalView({ uid, lang, title, onSave }: { uid: string, lang: Language, title?: string, onSave?: () => void }) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [content, setContent] = useState("");
@@ -1591,9 +1958,16 @@ function JournalView({ uid, lang }: { uid: string, lang: Language }) {
   const t = translations[lang];
 
   useEffect(() => {
-    const q = query(collection(db, "journal"), where("uid", "==", uid), orderBy("timestamp", "desc"));
+    const q = query(collection(db, "journal"), where("uid", "==", uid));
     return onSnapshot(q, (snap) => {
-      setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() }) as JournalEntry));
+      const sorted = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as JournalEntry)
+        .sort((a, b) => {
+          const tA = a.timestamp instanceof Date ? a.timestamp : (a.timestamp as any)?.toDate?.() || new Date(0);
+          const tB = b.timestamp instanceof Date ? b.timestamp : (b.timestamp as any)?.toDate?.() || new Date(0);
+          return tB.getTime() - tA.getTime();
+        });
+      setEntries(sorted);
     }, (err) => handleFirestoreError(err, OperationType.LIST, "journal"));
   }, [uid]);
 
@@ -1609,6 +1983,7 @@ function JournalView({ uid, lang }: { uid: string, lang: Language }) {
       });
       setContent("");
       setIsAdding(false);
+      onSave?.();
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
     } finally {
@@ -1617,9 +1992,9 @@ function JournalView({ uid, lang }: { uid: string, lang: Language }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex justify-between items-center">
-        <h2 className="text-2xl font-serif font-bold">{t.yourJournal}</h2>
+        <h2 className="text-2xl font-serif font-bold dark:text-slate-100">{title || t.yourJournal}</h2>
       </header>
 
       {isAdding ? (
@@ -1629,7 +2004,7 @@ function JournalView({ uid, lang }: { uid: string, lang: Language }) {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your thoughts..."
-            className="w-full p-6 bg-white border border-gray-100 rounded-3xl min-h-[300px] shadow-sm text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/10"
+            className="w-full p-6 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl min-h-[300px] shadow-sm text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/10 dark:text-slate-200"
           />
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => setIsAdding(false)}>Cancel</Button>
@@ -1640,7 +2015,7 @@ function JournalView({ uid, lang }: { uid: string, lang: Language }) {
         </motion.div>
       ) : (
         <div className="space-y-4">
-          <Button onClick={() => setIsAdding(true)} className="w-full py-6 text-xl border-dashed border-2 bg-transparent border-primary-soft/20 text-primary-soft hover:bg-pastel-green">
+          <Button onClick={() => setIsAdding(true)} className="w-full py-6 text-xl border-dashed border-2 bg-transparent border-primary-soft/20 dark:border-primary-soft/10 text-primary-soft hover:bg-pastel-green dark:hover:bg-slate-800">
             <Plus /> New Reflection
           </Button>
 
@@ -1649,12 +2024,12 @@ function JournalView({ uid, lang }: { uid: string, lang: Language }) {
                const date = entry.timestamp instanceof Date ? entry.timestamp : (entry.timestamp as any).toDate?.() || new Date();
                return (
                 <div key={entry.id} className="relative pl-6 border-l-2 border-primary-soft/10 pb-2">
-                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-primary-soft" />
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2">
+                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-primary-soft opacity-50" />
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2">
                     {format(date, 'MMM do, yyyy · HH:mm')}
                   </p>
                   <Card>
-                    <p className="text-gray-700 whitespace-pre-wrap">{entry.content}</p>
+                    <p className="text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{entry.content}</p>
                   </Card>
                 </div>
                );
@@ -1680,80 +2055,130 @@ function MoodIcon({ mood, className }: { mood: Mood; className?: string }) {
   }
 }
 
-function SettingsView({ profile, onLogout, lang }: { profile: UserProfile, onLogout: () => void, lang: Language }) {
+function SettingsView({ profile, onLogout, lang, setLang }: { profile: UserProfile, onLogout: () => void, lang: Language, setLang: (l: Language) => void }) {
   const t = translations[lang];
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    setUpdating(Object.keys(updates)[0]);
+    try {
+      await setDoc(doc(db, "users", profile.uid), updates, { merge: true });
+    } catch (err) {
+      console.error("Update failed:", err);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
   return (
-    <div className="p-6 space-y-12">
+    <div className="space-y-12 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="space-y-2">
-        <h2 className="text-4xl font-serif font-bold">{t.settings}</h2>
-        <p className="text-gray-500">Manage your profile and app preferences.</p>
+        <h2 className="text-4xl font-serif font-bold tracking-tight dark:text-slate-100">{t.settings}</h2>
+        <p className="text-gray-500 font-medium dark:text-gray-400">Manage your path to peace.</p>
       </header>
 
       <div className="space-y-6">
         <section className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">Account</h3>
-          <Card className="divide-y divide-gray-100 p-0 overflow-hidden border-gray-100">
-            <div className="p-6 flex justify-between items-center">
-              <div>
-                <p className="font-bold text-gray-900">{profile.displayName}</p>
-                <p className="text-sm text-gray-500">{profile.email}</p>
-              </div>
-              <UserIcon className="w-10 h-10 text-gray-200 bg-gray-50 p-2 rounded-full" />
+          <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-1">{t.account}</h3>
+          <Card className="p-6 border-0 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-4">
+               <div className="w-12 h-12 bg-primary-soft/10 rounded-2xl flex items-center justify-center">
+                  <UserIcon className="text-primary-soft w-6 h-6" />
+               </div>
+               <div>
+                  <p className="font-bold dark:text-slate-200">{profile.displayName}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{profile.email}</p>
+               </div>
             </div>
           </Card>
         </section>
 
         <section className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">{t.appPreferences}</h3>
-          <Card className="divide-y divide-gray-100 p-0 overflow-hidden border-gray-100">
-            <div className="p-6 flex justify-between items-center">
-              <div>
-                <p className="font-bold">{t.preferredLanguage}</p>
-                <p className="text-sm text-gray-500">{t.langAIResponses}</p>
-              </div>
-              <span className="text-primary-soft font-bold uppercase">{profile.preferredLanguage}</span>
-            </div>
-            <div className="p-6 flex justify-between items-center opacity-50">
-              <div>
-                <p className="font-bold">{t.cloudSync}</p>
-                <p className="text-sm text-gray-500">{t.alwaysActive}</p>
-              </div>
-              <CloudMoon className="w-5 h-5 text-primary-soft" />
-            </div>
+          <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-1">{t.interface}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <Card className="p-6 border-0 shadow-sm space-y-4 bg-white dark:bg-slate-800">
+                <div className="flex items-center gap-2">
+                   <Globe className="w-4 h-4 text-primary-soft dark:text-emerald-400" />
+                   <span className="text-xs font-bold text-gray-700 dark:text-slate-300">{t.preferredLanguage}</span>
+                </div>
+                <div className="flex gap-2 p-1 bg-gray-50 dark:bg-slate-900 rounded-xl">
+                   {['en', 'hi', 'ur'].map((l) => (
+                     <button 
+                       key={l}
+                       onClick={() => {
+                          setLang(l as any);
+                          updateProfile({ preferredLanguage: l as any });
+                       }}
+                       className={cn(
+                         "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                         lang === l ? "bg-white dark:bg-slate-700 text-primary-soft shadow-sm" : "text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400"
+                       )}
+                     >
+                       {l.toUpperCase()}
+                     </button>
+                   ))}
+                </div>
+             </Card>
+
+             <Card className="p-6 border-0 shadow-sm space-y-4 bg-white dark:bg-slate-800">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-2">
+                      <CloudMoon className="w-4 h-4 text-primary-soft dark:text-emerald-400" />
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-300">{t.cloudSync}</span>
+                   </div>
+                   <div className="w-8 h-4 bg-emerald-100 dark:bg-emerald-900/50 rounded-full relative">
+                      <div className="absolute right-0.5 top-0.5 w-3 h-3 bg-emerald-500 dark:bg-emerald-400 rounded-full" />
+                   </div>
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{t.alwaysActive}</p>
+             </Card>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-1">{t.privacy}</h3>
+          <Card className="p-6 border-0 shadow-sm bg-white dark:bg-slate-800">
+             <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
+                {t.privacyDescription}
+             </p>
           </Card>
         </section>
 
-        <section className="pt-8">
-          <Button variant="outline" onClick={onLogout} className="w-full h-14 rounded-2xl border-primary-soft/20 text-primary-strong hover:bg-primary-soft/5 hover:border-primary-soft/40 shadow-sm transition-all border-2">
-            <LogOut className="w-5 h-5 mr-2" />
-            {t.signOut}
-          </Button>
-        </section>
-      </div>
+        <Button 
+          variant="secondary" 
+          onClick={onLogout} 
+          className="w-full py-8 rounded-3xl border-red-50 text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-900/10 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:text-red-300 transition-all font-bold group"
+        >
+          <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          {t.signOut}
+        </Button>
 
-      <div className="text-center">
-        <p className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">Sukoon v1.0.0 · Your life matters.</p>
+        <div className="text-center pt-8">
+          <p className="text-[10px] text-gray-300 dark:text-gray-600 uppercase tracking-[0.3em] font-bold">
+            Sukoon · Inner Peace Starts Within
+          </p>
+        </div>
       </div>
     </div>
   );
 }
 
-function Navigation({ view, setView, lang }: { view: string, setView: (v: any) => void, lang: Language }) {
+function Navigation({ view, setView, lang, sukoonMode }: { view: string, setView: (v: any) => void, lang: Language, sukoonMode: boolean }) {
   const t = translations[lang];
   const items = [
     { id: 'home', icon: Heart, label: t.home },
     { id: 'talk', icon: MessageSquare, label: t.talk },
     { id: 'calm', icon: CalmIcon, label: t.calm },
-    { id: 'future-me', icon: Anchor, label: t.futureMe || 'Future Me' },
-    { id: 'journal', icon: BookOpen, label: t.journal },
-    { id: 'growth', icon: Repeat, label: t.growth },
     { id: 'settings', icon: Settings, label: t.settings },
   ];
 
   return (
     <>
       {/* Desktop Rail */}
-      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 bg-white border-r border-gray-100 flex-col items-center py-8 gap-8 shadow-sm">
+      <nav className={cn(
+        "hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-8 gap-8 shadow-sm transition-colors duration-700 z-50",
+        sukoonMode ? "bg-slate-900 border-r border-slate-800" : "bg-white border-r border-gray-100"
+      )}>
         <div className="bg-primary-soft p-3 rounded-2xl mb-4 text-white shadow-md shadow-primary-soft/20">
           <Heart className="w-6 h-6 fill-current" />
         </div>
@@ -1763,7 +2188,9 @@ function Navigation({ view, setView, lang }: { view: string, setView: (v: any) =
             onClick={() => setView(item.id)}
             className={cn(
               "p-3 rounded-2xl transition-all relative group",
-              view === item.id ? "bg-primary-soft/10 text-primary-soft" : "text-gray-300 hover:text-primary-soft/60"
+              view === item.id 
+                ? (sukoonMode ? "bg-slate-800 text-slate-200" : "bg-primary-soft/10 text-primary-soft")
+                : (sukoonMode ? "text-slate-600 hover:text-slate-400" : "text-gray-300 hover:text-primary-soft/60")
             )}
           >
             <item.icon className="w-6 h-6" />
@@ -1775,12 +2202,19 @@ function Navigation({ view, setView, lang }: { view: string, setView: (v: any) =
       </nav>
 
       {/* Mobile Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-50 flex justify-around p-4 z-40 backdrop-blur-md bg-white/90 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+      <nav className={cn(
+        "md:hidden fixed bottom-0 left-0 right-0 flex justify-around p-4 z-40 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.02)] transition-colors duration-700",
+        sukoonMode ? "bg-slate-900/90 border-t border-slate-800" : "bg-white/90 border-t border-gray-50"
+      )}>
         {items.map(item => (
           <button 
             key={item.id} 
             onClick={() => setView(item.id)}
-            className={cn( "p-2 transition-all", view === item.id ? "text-primary-soft scale-110" : "text-gray-300" )}
+            className={cn( "p-2 transition-all", 
+              view === item.id 
+                ? (sukoonMode ? "text-slate-200 scale-110" : "text-primary-soft scale-110")
+                : (sukoonMode ? "text-slate-600" : "text-gray-300")
+            )}
           >
             <item.icon className="w-6 h-6" />
           </button>
@@ -1803,35 +2237,35 @@ function CrisisModal({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () =
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-4">
-      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-gray-900/60 dark:bg-black/80 backdrop-blur-sm" onClick={onClose} />
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-[32px] p-8 max-w-lg w-full relative z-[101] shadow-2xl"
+        className="bg-white dark:bg-slate-900 rounded-[32px] p-8 max-w-lg w-full relative z-[101] shadow-2xl dark:shadow-black/50"
       >
         <div className="text-center mb-8">
-          <div className="bg-primary-soft/10 text-primary-strong p-4 rounded-full w-fit mx-auto mb-4">
+          <div className="bg-primary-soft/10 dark:bg-emerald-900/30 text-primary-strong dark:text-emerald-400 p-4 rounded-full w-fit mx-auto mb-4">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-serif font-bold text-gray-900">{t.youAreNotAlone}</h2>
-          <p className="text-gray-600 mt-2">{t.crisisHelpDescription}</p>
+          <h2 className="text-2xl font-serif font-bold text-gray-900 dark:text-slate-100">{t.youAreNotAlone}</h2>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">{t.crisisHelpDescription}</p>
         </div>
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
           {resources.map(res => (
-            <div key={res.country} className="p-4 bg-gray-50 rounded-2xl flex justify-between items-center">
+            <div key={res.country} className="p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl flex justify-between items-center">
               <div>
-                <p className="font-bold text-gray-900">{res.country}</p>
-                <p className="text-xs text-gray-500">{res.description}</p>
+                <p className="font-bold text-gray-900 dark:text-slate-200">{res.country}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{res.description}</p>
               </div>
-              <p className="text-primary-soft font-mono font-bold">{res.hotline}</p>
+              <p className="text-primary-soft dark:text-emerald-400 font-mono font-bold text-xs">{res.hotline}</p>
             </div>
           ))}
         </div>
 
         <div className="mt-8 flex flex-col gap-3">
-          <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">{t.emergencyCall}</p>
-          <Button onClick={onClose} className="w-full py-4 bg-gray-900 text-white hover:bg-black rounded-2xl">{t.iUnderstand}</Button>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center uppercase tracking-widest font-bold">{t.emergencyCall}</p>
+          <Button onClick={onClose} className="w-full py-4 bg-gray-900 dark:bg-slate-800 text-white dark:text-slate-200 hover:bg-black dark:hover:bg-slate-700 rounded-2xl">{t.iUnderstand}</Button>
         </div>
       </motion.div>
     </div>

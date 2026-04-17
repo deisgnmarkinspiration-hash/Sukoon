@@ -82,3 +82,11 @@ export interface FutureMeMessage {
   prompt?: string; // The prompt that guided the creation
   createdAt: any; // Firestore timestamp
 }
+
+export interface WallOfHopeMessage {
+  id?: string;
+  text: string;
+  authorLang: "en" | "hi" | "ur";
+  createdAt: any; // Firestore timestamp
+  likes: number;
+}
