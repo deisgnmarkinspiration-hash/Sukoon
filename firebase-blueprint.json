@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with private settings and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User name" },
+        "preferredLanguage": { "type": "string", "enum": ["en", "hi", "ur"], "description": "Preferred interface and chat language" },
+        "onboardingComplete": { "type": "boolean", "description": "Whether the user has completed onboarding" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation date" },
+        "silentMode": { "type": "boolean", "description": "Low-interaction mode" }
+      },
+      "required": ["uid", "email"]
+    },
+    "MemoryEntry": {
+      "title": "MemoryEntry",
+      "description": "AI-detected patterns and emotional insights.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "patternName": { "type": "string" },
+        "observation": { "type": "string" },
+        "frequency": { "type": "integer" },
+        "lastTriggered": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["trigger", "strength", "insight"] }
+      },
+      "required": ["uid", "patternName", "type"]
+    },
+    "DecisionSession": {
+      "title": "DecisionSession",
+      "description": "Structured thinking for life decisions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "problem": { "type": "string" },
+        "analysis": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "problem"]
+    },
+    "MoodEntry": {
+      "title": "MoodEntry",
+      "description": "Recorded mood of the user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Time of recording" },
+        "mood": { "type": "string", "enum": ["calm", "anxious", "stressed", "sad", "neutral", "happy"], "description": "The mood value" },
+        "note": { "type": "string", "description": "Optional note about why they feel this way" },
+        "intensity": { "type": "integer", "description": "On scale of 1-10" }
+      },
+      "required": ["uid", "timestamp", "mood"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "User's private reflections.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Time of entry" },
+        "content": { "type": "string", "description": "The journal text" },
+        "title": { "type": "string", "description": "Optional title" },
+        "sentiment": { "type": "string", "description": "AI-detected sentiment" }
+      },
+      "required": ["uid", "timestamp", "content"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Wellness goals or habits.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "title": { "type": "string", "description": "Goal name (e.g., Daily Breathing)" },
+        "description": { "type": "string", "description": "Goal details" },
+        "frequency": { "type": "string", "enum": ["daily", "weekly"], "description": "How often" },
+        "completedDates": { "type": "array", "items": { "type": "string" }, "description": "Dates when goal was completed" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "frequency"]
+    },
+    "FutureMeMessage": {
+      "title": "FutureMeMessage",
+      "description": "Messages for the user's future self.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "audio", "video"] },
+        "content": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "prompt": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "type", "content", "tags"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Private user profile documents."
+    },
+    "/moods/{moodId}": {
+      "schema": "MoodEntry",
+      "description": "Mood tracking records."
+    },
+    "/journal/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Private journal entries."
+    },
+    "/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "User wellness goals."
+    },
+    "/memories/{memoryId}": {
+      "schema": "MemoryEntry",
+      "description": "Emotional patterns and insights."
+    },
+    "/decisions/{sessionId}": {
+      "schema": "DecisionSession",
+      "description": "Decision clarity sessions."
+    },
+    "/futureMeMessages/{messageId}": {
+      "schema": "FutureMeMessage",
+      "description": "Messages recorded for the future self."
+    }
+  }
+}

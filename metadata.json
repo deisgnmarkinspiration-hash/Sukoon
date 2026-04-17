@@ -1,0 +1,6 @@
+{
+  "name": "Sukoon",
+  "description": "A culturally grounded, crisis-aware mental wellness companion for South Asia. Sukoon provides a safe, anonymous space for reflection, guided self-help, and emotional support.",
+  "requestFramePermissions": ["microphone", "camera"],
+  "majorCapabilities": []
+}

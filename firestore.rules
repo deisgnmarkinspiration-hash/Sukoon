@@ -1,0 +1,213 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId} (Auth UID)
+// Fields:
+//   - uid: string (required, immutable)
+//   - email: string (required, immutable)
+//   - displayName: string (optional)
+//   - preferredLanguage: string (enum: en, hi, ur)
+//   - onboardingComplete: bool
+//   - createdAt: timestamp (required, immutable)
+//
+// Collection: moods
+// Document ID: {moodId}
+// Fields:
+//   - uid: string (required, immutable) - references users/{userId}
+//   - timestamp: timestamp (required, immutable)
+//   - mood: string (enum: calm, anxious, stressed, sad, neutral, happy)
+//   - note: string (max 500 chars)
+//   - intensity: number (1-10)
+//
+// Collection: journal
+// Document ID: {entryId}
+// Fields:
+//   - uid: string (required, immutable)
+//   - timestamp: timestamp (required, immutable)
+//   - content: string (required, max 5000 chars)
+//   - title: string (max 100 chars)
+//   - sentiment: string (max 50 chars)
+//
+// Collection: goals
+// Document ID: {goalId}
+// Fields:
+//   - uid: string (required, immutable)
+//   - title: string (required, max 100 chars)
+//   - description: string (max 500 chars)
+//   - frequency: string (enum: daily, weekly)
+//   - completedDates: list of strings (ISO dates)
+//   - createdAt: timestamp (required, immutable)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "deisgnmarkinspiration@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             (data.preferredLanguage in ['en', 'hi', 'ur']) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMood(data) {
+      return data.uid == request.auth.uid &&
+             data.timestamp is timestamp &&
+             (data.mood in ['calm', 'anxious', 'stressed', 'sad', 'neutral', 'happy']) &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 1000)) &&
+             (!('intensity' in data) || (data.intensity is int && data.intensity >= 1 && data.intensity <= 10));
+    }
+
+    function isValidJournal(data) {
+      return data.uid == request.auth.uid &&
+             data.timestamp is timestamp &&
+             data.content is string && data.content.size() <= 10000 &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 200)) &&
+             (!('sentiment' in data) || (data.sentiment is string && data.sentiment.size() <= 100));
+    }
+
+    function isValidGoal(data) {
+      return data.uid == request.auth.uid &&
+             data.title is string && data.title.size() <= 200 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (data.frequency in ['daily', 'weekly']) &&
+             data.completedDates is list &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMemory(data) {
+      return data.uid == request.auth.uid &&
+             data.patternName is string && data.patternName.size() <= 200 &&
+             data.observation is string && data.observation.size() <= 5000 &&
+             data.type in ['trigger', 'strength', 'insight'] &&
+             data.lastTriggered is timestamp;
+    }
+
+    function isValidDecision(data) {
+      return data.uid == request.auth.uid &&
+             data.problem is string && data.problem.size() <= 1000 &&
+             data.analysis is map &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFutureMeMessage(data) {
+      return data.uid == request.auth.uid &&
+             (data.type in ['text', 'audio', 'video']) &&
+             data.content is string && data.content.size() <= 1048576 && // Firestore 1MB doc limit
+             data.tags is list && data.tags.size() >= 1 &&
+             (!('prompt' in data) || (data.prompt is string && data.prompt.size() <= 1000)) &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) &&
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /moods/{moodId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && isValidMood(request.resource.data);
+      allow update: if isDocOwner() && isValidMood(request.resource.data) &&
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.timestamp == resource.data.timestamp;
+      allow delete: if isDocOwner();
+    }
+
+    match /journal/{entryId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && isValidJournal(request.resource.data);
+      allow update: if isDocOwner() && isValidJournal(request.resource.data) &&
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.timestamp == resource.data.timestamp;
+      allow delete: if isDocOwner();
+    }
+
+    match /goals/{goalId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && isValidGoal(request.resource.data);
+      allow update: if isDocOwner() && isValidGoal(request.resource.data) &&
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner();
+    }
+
+    match /memories/{memoryId} {
+      allow read: if isDocOwner();
+      allow create, update: if isDocOwner() && isValidMemory(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /decisions/{sessionId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidDecision(request.resource.data);
+      allow update: if isDocOwner() && isValidDecision(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /futureMeMessages/{messageId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidFutureMeMessage(request.resource.data);
+      allow update: if isDocOwner() && isValidFutureMeMessage(request.resource.data) &&
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

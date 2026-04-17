@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Noto+Sans+Devanagari:wght@400;700&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", "Noto Serif", serif;
+  --font-hindi: "Noto Sans Devanagari", sans-serif;
+  --font-urdu: "Noto Nastaliq Urdu", serif;
+
+  --color-primary-soft: #6BAF92;
+  --color-primary-strong: #4A8C73;
+  --color-cream: #FFFAF1;
+  --color-pastel-green: #F1F9F6;
+  --color-pastel-purple: #F5F3FF;
+  --color-pastel-blue: #F0F7FF;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-cream text-gray-900;
+  }
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-hindi {
+  font-family: var(--font-hindi);
+}
+
+.font-urdu {
+  font-family: var(--font-urdu);
+}
+
+.atmosphere {
+  background:
+    radial-gradient(circle at 50% 30%, #064e3b 0%, transparent 60%),
+    radial-gradient(circle at 10% 80%, #059669 0%, transparent 50%);
+  filter: blur(80px);
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
