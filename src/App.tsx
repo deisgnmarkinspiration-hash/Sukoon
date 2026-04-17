@@ -64,6 +64,7 @@ import {
 
 import { auth, db, loginWithGoogle, logout, OperationType, handleFirestoreError } from "./lib/firebase";
 import { cn } from "./lib/utils";
+import { translations, Language } from "./translations";
 import { Mood, UserProfile, MoodEntry, JournalEntry, Goal, ChatMessage, MemoryEntry, DecisionSession, Intervention, FutureMeMessage } from "./types";
 import { chatWithSukoon, detectCrisis, transcribeAudio, detectPatterns, generateIntervention, structureDecision } from "./services/gemini";
 
@@ -317,14 +318,16 @@ interface FutureMeViewProps {
   messages: FutureMeMessage[];
   onPlay: (msg: FutureMeMessage) => void;
   uid: string;
+  lang: Language;
 }
 
-const FutureMeView = ({ messages, onPlay, uid }: FutureMeViewProps) => {
+const FutureMeView = ({ messages, onPlay, uid, lang }: FutureMeViewProps) => {
   const [mode, setMode] = useState<'list' | 'create'>('list');
   const [type, setType] = useState<'text' | 'audio' | 'video'>('text');
   const [content, setContent] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const t = translations[lang];
   const [isRecording, setIsRecording] = useState(false);
   const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -420,12 +423,12 @@ const FutureMeView = ({ messages, onPlay, uid }: FutureMeViewProps) => {
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex justify-between items-end">
         <div className="space-y-1">
-          <h2 className="text-3xl font-serif">Future Me Support</h2>
-          <p className="text-gray-500 text-sm italic-small italic">Messages from your stable self.</p>
+          <h2 className="text-3xl font-serif">{t.futureMe}</h2>
+          <p className="text-gray-500 text-sm italic-small italic">{t.messagesFromSelf}</p>
         </div>
         <Button onClick={() => setMode(mode === 'list' ? 'create' : 'list')} variant="secondary">
           {mode === 'list' ? <Plus className="w-4 h-4" /> : <X className="w-4 h-4" />}
-          {mode === 'list' ? 'Record New' : 'Cancel'}
+          {mode === 'list' ? t.recordNew : t.cancel}
         </Button>
       </header>
 
@@ -922,6 +925,9 @@ function SukoonApp() {
     }
   }, [user, moods.length]);
 
+  const lang = profile?.preferredLanguage as Language || "en";
+  const tr = translations[lang];
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FDFCF9] gap-4 relative overflow-hidden">
@@ -930,7 +936,7 @@ function SukoonApp() {
           <Loader2 className="w-8 h-8 animate-spin text-primary-soft" />
           <div className="absolute inset-0 blur-xl bg-primary-soft/20 animate-pulse" />
         </div>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 animate-pulse relative z-10">finding peace...</p>
+        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 animate-pulse relative z-10">{tr.findingPeace}</p>
       </div>
     );
   }
@@ -945,7 +951,7 @@ function SukoonApp() {
     <div className="min-h-screen bg-[#FDFCF9] text-gray-900 pb-24 md:pb-0 md:pl-20 relative overflow-hidden">
       <CalmingBackground />
       {/* Sidebar / Bottom Nav */}
-      <Navigation view={view} setView={setView} />
+      <Navigation view={view} setView={setView} lang={lang} />
 
       {showConfigError && (
         <div className="fixed top-0 left-0 right-0 z-[100] bg-orange-50 border-b border-orange-100 p-3 flex items-center justify-center gap-4 animate-in slide-in-from-top duration-500">
@@ -974,7 +980,7 @@ function SukoonApp() {
                   <h1 className="text-4xl font-serif font-bold text-gray-900 leading-tight">
                     {profile?.displayName?.split(' ')[0]},
                   </h1>
-                  <p className="text-gray-500 font-medium">Breathe in. You are here.</p>
+                  <p className="text-gray-500 font-medium">{tr.howFeeling}</p>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => setView('settings')} className="rounded-2xl h-12 w-12 p-0 bg-white border-gray-100">
@@ -991,8 +997,8 @@ function SukoonApp() {
                 className="w-full bg-primary-strong text-white p-6 rounded-[32px] flex items-center justify-between group transition-all shadow-xl shadow-primary-soft/10"
               >
                 <div className="text-left">
-                  <span className="text-[10px] uppercase tracking-widest font-bold opacity-70 text-white/80">Instant Help</span>
-                  <h2 className="text-2xl font-serif font-bold">I'm not okay</h2>
+                  <span className="text-[10px] uppercase tracking-widest font-bold opacity-70 text-white/80">{tr.sos}</span>
+                  <h2 className="text-2xl font-serif font-bold">{tr.overwhelmed}</h2>
                 </div>
                 <motion.div 
                   animate={{ scale: [1, 1.1, 1] }}
@@ -1011,9 +1017,9 @@ function SukoonApp() {
                 >
                   <Card className="bg-pastel-green border-0 p-8 flex flex-col justify-between min-h-[220px] shadow-sm relative overflow-hidden group h-full">
                     <div className="relative z-10">
-                      <h3 className="text-2xl font-serif font-bold mb-2 text-primary-strong">My Anchor</h3>
+                      <h3 className="text-2xl font-serif font-bold mb-2 text-primary-strong">{tr.myAnchor}</h3>
                       <p className="text-primary-soft/80 text-sm leading-relaxed mb-6">
-                        Hear your own voice from a calmer time.
+                        {tr.hearVoice}
                       </p>
                     </div>
                     <div className="relative z-10 flex gap-2">
@@ -1023,11 +1029,11 @@ function SukoonApp() {
                           className="bg-primary-soft text-white hover:bg-primary-strong w-full h-14 rounded-2xl border-0 shadow-lg shadow-primary-soft/20"
                         >
                           <Play className="w-5 h-5 fill-current" />
-                          Play Lifeline
+                          {tr.playLifeline}
                         </Button>
                       ) : (
                         <Button onClick={() => setView('future-me')} className="bg-primary-soft text-white hover:bg-primary-strong w-full h-14 rounded-2xl border-0 shadow-lg shadow-primary-soft/20">
-                          Record your first anchor
+                          {tr.recordAnchor}
                         </Button>
                       )}
                     </div>
@@ -1042,14 +1048,14 @@ function SukoonApp() {
                 >
                   <Card className="bg-pastel-green border-0 p-8 flex flex-col justify-between min-h-[220px] shadow-sm relative overflow-hidden group h-full">
                     <div className="relative z-10">
-                      <h3 className="text-2xl font-serif font-bold mb-2 text-primary-strong">Let it out</h3>
+                      <h3 className="text-2xl font-serif font-bold mb-2 text-primary-strong">{tr.letItOut}</h3>
                       <p className="text-primary-soft/80 text-sm leading-relaxed mb-6">
-                        No judgment. No filters. Just vent to Sukoon.
+                        {tr.noJudgment}
                       </p>
                     </div>
                     <Button onClick={() => setView('talk')} className="relative z-10 bg-primary-soft text-white hover:bg-primary-strong w-full h-14 rounded-2xl border-0 shadow-lg shadow-primary-soft/20">
                       <MessageSquare className="w-5 h-5" />
-                      Talk it out
+                      {tr.talkItOut}
                     </Button>
                     <MessageCircle className="absolute top-0 right-0 w-44 h-44 text-primary-soft/10 -rotate-12 translate-x-12 -translate-y-12 transition-transform group-hover:scale-110 duration-500" />
                   </Card>
@@ -1062,8 +1068,8 @@ function SukoonApp() {
                   <Timer className="w-10 h-10 text-primary-soft" />
                 </div>
                 <div className="flex-1 space-y-2">
-                  <h3 className="text-xl font-bold text-primary-strong">Need 60s of calm?</h3>
-                  <p className="text-primary-soft/70 text-sm font-medium">Guided breathing and grounding for an instant reset.</p>
+                  <h3 className="text-xl font-bold text-primary-strong">{tr.needCalm}</h3>
+                  <p className="text-primary-soft/70 text-sm font-medium">{tr.guidedBreathing}</p>
                 </div>
                 <Button 
                   onClick={async () => {
@@ -1072,7 +1078,7 @@ function SukoonApp() {
                   }}
                   className="bg-primary-soft text-white hover:bg-primary-strong h-14 px-8 rounded-2xl w-full md:w-auto border-0"
                 >
-                  Start Reset
+                  {tr.startReset}
                 </Button>
               </section>
 
@@ -1087,24 +1093,24 @@ function SukoonApp() {
                 >
                   <CloudMoon className={cn("w-5 h-5", profile?.silentMode && "text-primary-soft")} />
                   <span className="text-xs font-bold uppercase tracking-widest leading-none">
-                    {profile?.silentMode ? "Silent Mode Active" : "Go Silent"}
+                    {profile?.silentMode ? tr.silentModeActive : tr.goSilent}
                   </span>
                 </button>
               </div>
             </motion.div>
           )}
 
-          {view === 'talk' && <ChatView profile={profile!} onNewIntervention={(i) => setActiveIntervention(i)} />}
+          {view === 'talk' && <ChatView profile={profile!} onNewIntervention={(i) => setActiveIntervention(i)} lang={lang} />}
           {view === 'calm' && (
              <div className="p-6 space-y-12">
                <header className="space-y-2">
-                 <h2 className="text-4xl font-serif">Quiet the Noise</h2>
-                 <p className="text-gray-500">Fast interventions for difficult moments.</p>
+                 <h2 className="text-4xl font-serif">{tr.calm}</h2>
+                 <p className="text-gray-500">{tr.guidedBreathing}</p>
                </header>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { label: "Panic attack", mood: "panic" },
-                    { label: "Can't sleep", mood: "insomnia" },
+                    { label: tr.overwhelmed, mood: "panic" },
+                    { label: tr.needCalm, mood: "insomnia" },
                     { label: "Endless scrolling", mood: "distracted" },
                     { label: "Heavy chest", mood: "heavy" }
                   ].map(item => (
@@ -1119,27 +1125,28 @@ function SukoonApp() {
                     </Card>
                   ))}
                </div>
-               <MoodView onComplete={() => setView('home')} uid={user.uid} />
+               <MoodView onComplete={() => setView('home')} uid={user.uid} lang={lang} />
              </div>
           )}
-          {view === 'journal' && <JournalView uid={user.uid} />}
+          {view === 'journal' && <JournalView uid={user.uid} lang={lang} />}
           {view === 'future-me' && (
             <FutureMeView 
               messages={futureMeMessages} 
               onPlay={(msg) => setActivePlaybackMessage(msg)}
               uid={user.uid}
+              lang={lang}
             />
           )}
-          {view === 'settings' && <SettingsView profile={profile!} onLogout={logout} />}
+          {view === 'settings' && <SettingsView profile={profile!} onLogout={() => logout()} lang={lang} />}
           {view === 'growth' && (
             <div className="p-6 space-y-12">
                <header className="space-y-2">
-                 <h2 className="text-4xl font-serif">Healing Graph</h2>
-                 <p className="text-gray-500">Untangling the patterns of your journey.</p>
+                 <h2 className="text-4xl font-serif">{tr.healingGraph}</h2>
+                 <p className="text-gray-500">{tr.untanglingPatterns}</p>
                </header>
                <InsightsView memories={memories} />
                <div className="border-t pt-12">
-                 <h3 className="text-xl font-bold mb-6">Untangle Thinking</h3>
+                 <h3 className="text-xl font-bold mb-6">{tr.untangleThinking}</h3>
                  <DecisionView decisions={decisions} onAnalyze={onAnalyzeDecision} />
                </div>
             </div>
@@ -1164,7 +1171,7 @@ function SukoonApp() {
       </AnimatePresence>
 
       {/* Crisis Modal */}
-      <CrisisModal isOpen={isCrisisModalOpen} onClose={() => setIsCrisisModalOpen(false)} />
+      <CrisisModal isOpen={isCrisisModalOpen} onClose={() => setIsCrisisModalOpen(false)} lang={lang} />
     </div>
   );
 }
@@ -1225,8 +1232,8 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
       >
         {step === 1 ? (
           <>
-            <h2 className="text-2xl font-bold">Pick your language</h2>
-            <p className="text-gray-500">We want Sukoon to feel like home.</p>
+            <h2 className="text-2xl font-bold">{translations[lang].pickLanguage}</h2>
+            <p className="text-gray-500">{translations[lang].home === 'होम' ? 'हम चाहते हैं कि सुकून घर जैसा लगे।' : (translations[lang].home === 'ہوم' ? 'ہم چاہتے ہیں کہ سکون گھر جیسا محسوس ہو۔' : 'We want Sukoon to feel like home.')}</p>
             <div className="grid grid-cols-1 gap-3">
               {(["en", "hi", "ur"] as const).map(l => (
                   <button 
@@ -1242,26 +1249,26 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
                   </button>
               ))}
             </div>
-            <Button onClick={() => setStep(2)} className="w-full py-4 bg-primary-soft text-white border-0">Continue</Button>
+            <Button onClick={() => setStep(2)} className="w-full py-4 bg-primary-soft text-white border-0">{translations[lang].continue}</Button>
           </>
         ) : (
           <>
-            <h2 className="text-2xl font-bold">Privacy & Purpose</h2>
+            <h2 className="text-2xl font-bold">{translations[lang].privacyPurpose}</h2>
             <div className="space-y-4 text-gray-600">
               <div className="flex gap-4">
                 <ShieldAlert className="shrink-0 text-primary-soft" />
-                <p className="text-sm">Your data is private. We don't share your journal or chat history with anyone.</p>
+                <p className="text-sm">{translations[lang].privacyDescription}</p>
               </div>
               <div className="flex gap-4">
                 <Heart className="shrink-0 text-primary-soft" />
-                <p className="text-sm">Sukoon is an AI companion for emotional support, not a clinical therapist.</p>
+                <p className="text-sm">{translations[lang].aiCompanionDescription}</p>
               </div>
               <div className="flex gap-4">
                 <ShieldAlert className="shrink-0 text-primary-soft" />
-                <p className="text-sm">If you are in danger, please use the Support red button to find help.</p>
+                <p className="text-sm">{translations[lang].crisisRedirectDescription}</p>
               </div>
             </div>
-            <Button onClick={finish} className="w-full py-4 bg-primary-soft text-white border-0">Finish Setup</Button>
+            <Button onClick={finish} className="w-full py-4 bg-primary-soft text-white border-0">{translations[lang].finishSetup}</Button>
           </>
         )}
       </motion.div>
@@ -1269,7 +1276,7 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
   );
 }
 
-function ChatView({ profile, onNewIntervention }: { profile: UserProfile, onNewIntervention: (i: Intervention) => void }) {
+function ChatView({ profile, onNewIntervention, lang }: { profile: UserProfile, onNewIntervention: (i: Intervention) => void, lang: Language }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -1278,6 +1285,7 @@ function ChatView({ profile, onNewIntervention }: { profile: UserProfile, onNewI
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const t = translations[lang];
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1383,12 +1391,12 @@ function ChatView({ profile, onNewIntervention }: { profile: UserProfile, onNewI
     <div className="fixed inset-0 bg-transparent z-50 flex flex-col md:static md:inset-auto md:h-[80vh]">
       <header className="p-4 border-b flex items-center justify-between bg-white/80 backdrop-blur shrink-0">
         <div className="flex flex-col">
-          <span className="font-serif font-bold text-lg">Talk it out</span>
-          <span className="text-[10px] text-primary-soft uppercase tracking-widest font-bold">Safe Space</span>
+          <span className="font-serif font-bold text-lg">{t.talkItOut}</span>
+          <span className="text-[10px] text-primary-soft uppercase tracking-widest font-bold">{t.safeSpace}</span>
         </div>
         <div className="flex items-center gap-2">
            <div className="w-2 h-2 rounded-full bg-primary-soft animate-pulse" />
-           <span className="text-[10px] uppercase font-bold text-gray-400">Listener Active</span>
+           <span className="text-[10px] uppercase font-bold text-gray-400">{t.listenerActive}</span>
         </div>
       </header>
       
@@ -1399,17 +1407,17 @@ function ChatView({ profile, onNewIntervention }: { profile: UserProfile, onNewI
               <MessageSquare className="w-10 h-10 text-primary-soft -rotate-3" />
             </div>
             <div className="max-w-xs mx-auto space-y-1">
-              <h3 className="font-serif font-bold text-xl">I'm listening.</h3>
-              <p className="text-sm text-gray-400 leading-relaxed">No judgment. No filters. Just vent, scream, or cry. Start by letting it all out.</p>
+              <h3 className="font-serif font-bold text-xl">{t.listening}</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">{t.ventScream}</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center pt-4">
-              {["I feel overwhelmed", "I'm having a hard day", "I just need to vent"].map(t => (
+              {[t.overwhelmed, t.hardDay, t.justVent].map(suggestion => (
                 <button 
-                  key={t}
-                  onClick={() => setInput(t)}
+                  key={suggestion}
+                  onClick={() => setInput(suggestion)}
                   className="px-4 py-2 bg-white border border-gray-100 rounded-full text-xs text-gray-500 hover:border-primary-soft/20 transition-all font-medium"
                 >
-                  {t}
+                  {suggestion}
                 </button>
               ))}
             </div>
@@ -1487,19 +1495,20 @@ function ChatView({ profile, onNewIntervention }: { profile: UserProfile, onNewI
   );
 }
 
-function MoodView({ onComplete, uid }: { onComplete: () => void, uid: string }) {
+function MoodView({ onComplete, uid, lang }: { onComplete: () => void, uid: string, lang: Language }) {
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [intensity, setIntensity] = useState(5);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const t = translations[lang];
 
   const moodsList: { id: Mood, label: string }[] = [
-    { id: 'happy', label: 'Happy' },
-    { id: 'calm', label: 'Calm' },
-    { id: 'neutral', label: 'Neutral' },
-    { id: 'sad', label: 'Sad' },
-    { id: 'stressed', label: 'Stressed' },
-    { id: 'anxious', label: 'Anxious' },
+    { id: 'happy', label: t.happy },
+    { id: 'calm', label: t.calm },
+    { id: 'neutral', label: t.neutral },
+    { id: 'sad', label: t.sad },
+    { id: 'stressed', label: t.stressed },
+    { id: 'anxious', label: t.anxious },
   ];
 
   const save = async () => {
@@ -1574,11 +1583,12 @@ function MoodView({ onComplete, uid }: { onComplete: () => void, uid: string }) 
   );
 }
 
-function JournalView({ uid }: { uid: string }) {
+function JournalView({ uid, lang }: { uid: string, lang: Language }) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const t = translations[lang];
 
   useEffect(() => {
     const q = query(collection(db, "journal"), where("uid", "==", uid), orderBy("timestamp", "desc"));
@@ -1609,7 +1619,7 @@ function JournalView({ uid }: { uid: string }) {
   return (
     <div className="space-y-8">
       <header className="flex justify-between items-center">
-        <h2 className="text-2xl font-serif font-bold">Your Journal</h2>
+        <h2 className="text-2xl font-serif font-bold">{t.yourJournal}</h2>
       </header>
 
       {isAdding ? (
@@ -1670,11 +1680,12 @@ function MoodIcon({ mood, className }: { mood: Mood; className?: string }) {
   }
 }
 
-function SettingsView({ profile, onLogout }: { profile: UserProfile, onLogout: () => void }) {
+function SettingsView({ profile, onLogout, lang }: { profile: UserProfile, onLogout: () => void, lang: Language }) {
+  const t = translations[lang];
   return (
     <div className="p-6 space-y-12">
       <header className="space-y-2">
-        <h2 className="text-4xl font-serif font-bold">Settings</h2>
+        <h2 className="text-4xl font-serif font-bold">{t.settings}</h2>
         <p className="text-gray-500">Manage your profile and app preferences.</p>
       </header>
 
@@ -1693,19 +1704,19 @@ function SettingsView({ profile, onLogout }: { profile: UserProfile, onLogout: (
         </section>
 
         <section className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">App Preferences</h3>
+          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">{t.appPreferences}</h3>
           <Card className="divide-y divide-gray-100 p-0 overflow-hidden border-gray-100">
             <div className="p-6 flex justify-between items-center">
               <div>
-                <p className="font-bold">Preferred Language</p>
-                <p className="text-sm text-gray-500">Language for AI responses</p>
+                <p className="font-bold">{t.preferredLanguage}</p>
+                <p className="text-sm text-gray-500">{t.langAIResponses}</p>
               </div>
               <span className="text-primary-soft font-bold uppercase">{profile.preferredLanguage}</span>
             </div>
             <div className="p-6 flex justify-between items-center opacity-50">
               <div>
-                <p className="font-bold">Cloud Sync</p>
-                <p className="text-sm text-gray-500">Always active</p>
+                <p className="font-bold">{t.cloudSync}</p>
+                <p className="text-sm text-gray-500">{t.alwaysActive}</p>
               </div>
               <CloudMoon className="w-5 h-5 text-primary-soft" />
             </div>
@@ -1715,7 +1726,7 @@ function SettingsView({ profile, onLogout }: { profile: UserProfile, onLogout: (
         <section className="pt-8">
           <Button variant="outline" onClick={onLogout} className="w-full h-14 rounded-2xl border-primary-soft/20 text-primary-strong hover:bg-primary-soft/5 hover:border-primary-soft/40 shadow-sm transition-all border-2">
             <LogOut className="w-5 h-5 mr-2" />
-            Sign Out
+            {t.signOut}
           </Button>
         </section>
       </div>
@@ -1727,15 +1738,16 @@ function SettingsView({ profile, onLogout }: { profile: UserProfile, onLogout: (
   );
 }
 
-function Navigation({ view, setView }: { view: string, setView: (v: any) => void }) {
+function Navigation({ view, setView, lang }: { view: string, setView: (v: any) => void, lang: Language }) {
+  const t = translations[lang];
   const items = [
-    { id: 'home', icon: Heart, label: 'Pulse' },
-    { id: 'talk', icon: MessageSquare, label: 'Talk' },
-    { id: 'calm', icon: CalmIcon, label: 'Calm' },
-    { id: 'future-me', icon: Anchor, label: 'Future Me' },
-    { id: 'journal', icon: BookOpen, label: 'Journal' },
-    { id: 'growth', icon: Repeat, label: 'Growth' },
-    { id: 'settings', icon: Settings, label: 'Settings' },
+    { id: 'home', icon: Heart, label: t.home },
+    { id: 'talk', icon: MessageSquare, label: t.talk },
+    { id: 'calm', icon: CalmIcon, label: t.calm },
+    { id: 'future-me', icon: Anchor, label: t.futureMe || 'Future Me' },
+    { id: 'journal', icon: BookOpen, label: t.journal },
+    { id: 'growth', icon: Repeat, label: t.growth },
+    { id: 'settings', icon: Settings, label: t.settings },
   ];
 
   return (
@@ -1778,8 +1790,9 @@ function Navigation({ view, setView }: { view: string, setView: (v: any) => void
   );
 }
 
-function CrisisModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+function CrisisModal({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () => void, lang: Language }) {
   if (!isOpen) return null;
+  const t = translations[lang];
 
   const resources = [
     { country: 'India', hotline: 'Vandrevala Foundation (1860-266-2345)', description: '24/7 mental health help' },
@@ -1800,8 +1813,8 @@ function CrisisModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void
           <div className="bg-primary-soft/10 text-primary-strong p-4 rounded-full w-fit mx-auto mb-4">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-serif font-bold text-gray-900">You are not alone.</h2>
-          <p className="text-gray-600 mt-2">If you are in immediate danger or considering self-harm, please reach out to one of the following resources.</p>
+          <h2 className="text-2xl font-serif font-bold text-gray-900">{t.youAreNotAlone}</h2>
+          <p className="text-gray-600 mt-2">{t.crisisHelpDescription}</p>
         </div>
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
@@ -1817,8 +1830,8 @@ function CrisisModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void
         </div>
 
         <div className="mt-8 flex flex-col gap-3">
-          <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">In an emergency, please call 112 / 999 or go to the nearest hospital.</p>
-          <Button onClick={onClose} className="w-full py-4 bg-gray-900 text-white hover:bg-black rounded-2xl">I understand</Button>
+          <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">{t.emergencyCall}</p>
+          <Button onClick={onClose} className="w-full py-4 bg-gray-900 text-white hover:bg-black rounded-2xl">{t.iUnderstand}</Button>
         </div>
       </motion.div>
     </div>
