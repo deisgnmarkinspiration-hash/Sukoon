@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format, startOfDay, subDays, isSameDay } from "date-fns";
+import { GoogleGenAI } from "@google/genai";
 import type { User } from "firebase/auth";
 import { 
   onAuthStateChanged 
@@ -111,6 +112,198 @@ const EnhancedCalmingBackground = ({ sukoonMode, theme = 'ocean' }: { sukoonMode
          transition={{ duration: t.d.d3, repeat: Infinity, delay: 10, ease: "easeInOut" }}
          className={cn("absolute -bottom-[20%] left-[20%] w-[60%] h-[60%] rounded-full blur-[140px] transition-colors duration-1000", sukoonMode ? "bg-purple-900/40" : t.o3)}
       />
+    </div>
+  );
+};
+
+const getAIReassurance = async (mood: string, reflection: string, lang: Language) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const prompt = `
+    Context: Mental health support app (South Asia focus, casual, warm)
+    User feels: ${mood}
+    What's happening: ${reflection}
+    Respond in ${lang === 'en' ? 'English' : lang === 'hi' ? 'Hindi' : 'Urdu'}.
+    Rules:
+    - 2-3 short sentences
+    - calm, human tone
+    - no clinical language
+    - validate feeling
+    - provide one tiny, actionable suggestion (e.g., wash face, drink water, write one thing)
+  `;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+    return response.text || "I'm here for you. Let's take things one step at a time.";
+  } catch (e) {
+    return "That sounds like a lot to carry. Let's focus on just this moment together.";
+  }
+};
+
+const GuidedHomeFlow = ({ 
+  lang, 
+  onComplete,
+  onSaveMood,
+  onJournal,
+  onFutureMe 
+}: { 
+  lang: Language, 
+  onComplete: () => void,
+  onSaveMood: (mood: string) => void,
+  onJournal: () => void,
+  onFutureMe: () => void
+}) => {
+  const [step, setStep] = useState<'entry' | 'calm' | 'reflect' | 'ai'>('entry');
+  const [selectedMood, setSelectedMood] = useState("");
+  const [reflection, setReflection] = useState("");
+  const [aiResponse, setAIResponse] = useState("");
+  const [loadingAI, setLoadingAI] = useState(false);
+  const t = translations[lang];
+
+  const handleMoodSelect = (mood: string) => {
+    setSelectedMood(mood);
+    onSaveMood(mood);
+    setStep('calm');
+  };
+
+  const handleReflect = async (val: string) => {
+    setReflection(val);
+    setStep('ai');
+    setLoadingAI(true);
+    const resp = await getAIReassurance(selectedMood, val, lang);
+    setAIResponse(resp);
+    setLoadingAI(false);
+  };
+
+  return (
+    <div className="min-h-[400px] flex items-center justify-center p-4">
+      <AnimatePresence mode="wait">
+        {step === 'entry' && (
+          <motion.div 
+            key="entry" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="w-full max-w-lg text-center space-y-12"
+          >
+            <h2 className="text-4xl md:text-5xl font-serif font-bold text-gray-900 leading-tight">{t.feelingQuestion}</h2>
+            <div className="grid grid-cols-2 gap-4">
+              {(['overwhelmed', 'anxious', 'low', 'okay'] as const).map(m => (
+                <Card 
+                  key={m} 
+                  onClick={() => handleMoodSelect(m)}
+                  className={cn(
+                    "p-8 cursor-pointer hover:border-primary-soft transition-all active:scale-95 flex flex-col items-center gap-4",
+                    m === 'overwhelmed' ? "bg-primary-strong text-white border-0 shadow-lg shadow-primary-soft/20" : "bg-white border-gray-100"
+                  )}
+                >
+                  <MoodIcon mood={m === 'overwhelmed' ? 'stressed' : m === 'low' ? 'sad' : m === 'okay' ? 'neutral' : 'anxious'} className="w-10 h-10" />
+                  <span className="font-bold text-lg">{t[m]}</span>
+                </Card>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {step === 'calm' && (
+          <motion.div 
+            key="calm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="text-center space-y-12"
+          >
+            <div className="space-y-4">
+              <h3 className="text-2xl font-serif text-gray-900">{t.guidedHomeStart}</h3>
+              <p className="text-gray-500">{t.guidedHomeSub}</p>
+            </div>
+            
+            <div className="flex flex-col items-center gap-8">
+              <div className="w-32 h-32 rounded-full border-4 border-primary-soft/20 flex items-center justify-center relative">
+                 <motion.div 
+                   animate={{ scale: [1, 1.5, 1] }} 
+                   transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+                   className="absolute inset-0 bg-primary-soft/10 rounded-full"
+                 />
+                 <span className="relative z-10 text-primary-soft font-bold">Breathe</span>
+              </div>
+              <p className="max-w-xs text-lg italic text-gray-600 font-serif">"{t.breathePrompt}"</p>
+              <Button onClick={() => setStep('reflect')} className="px-12 h-14 rounded-2xl">{t.done}</Button>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 'reflect' && (
+          <motion.div 
+            key="reflect" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+            className="w-full max-w-lg space-y-8"
+          >
+            <h3 className="text-3xl font-serif text-gray-900 text-center">{t.heavyPrompt}</h3>
+            <div className="grid gap-3">
+              {Object.entries(t.heavyOptions).map(([key, label]) => (
+                <button 
+                  key={key} 
+                  onClick={() => handleReflect(label as string)}
+                  className="w-full p-6 text-left rounded-2xl border border-gray-100 bg-white hover:bg-gray-50 hover:border-primary-soft/30 transition-all flex justify-between items-center group"
+                >
+                  <span className="font-medium text-gray-700">{label as string}</span>
+                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-primary-soft transition-colors" />
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <textarea 
+                placeholder="Or type anything else..."
+                className="w-full p-6 rounded-3xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-primary-soft/20 min-h-[120px]"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleReflect(e.currentTarget.value);
+                  }
+                }}
+              />
+              <button className="absolute bottom-4 right-4 bg-primary-soft text-white p-2 rounded-xl shadow-lg shadow-primary-soft/20">
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 'ai' && (
+          <motion.div 
+            key="ai" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-xl bg-white rounded-[40px] p-10 border border-primary-soft/5 shadow-2xl shadow-primary-soft/10 text-center space-y-10"
+          >
+            {loadingAI ? (
+              <div className="flex flex-col items-center gap-4 py-20">
+                <Loader2 className="w-10 h-10 text-primary-soft animate-spin" />
+                <p className="text-gray-400 italic">Thinking...</p>
+              </div>
+            ) : (
+              <div className="space-y-10">
+                <div className="w-16 h-16 bg-primary-soft/10 rounded-3xl flex items-center justify-center mx-auto text-primary-soft">
+                  <Heart className="w-8 h-8 fill-current" />
+                </div>
+                <div className="space-y-4">
+                  <p className="text-2xl font-serif text-gray-800 leading-relaxed italic">"{aiResponse}"</p>
+                  <p className="text-gray-400 text-sm">{t.oneSmallStep}</p>
+                </div>
+                
+                <div className="pt-4 space-y-3">
+                   <Button onClick={onJournal} className="w-full h-14 rounded-2xl bg-pastel-green text-primary-strong border-0">
+                     {t.saveToJournal}
+                   </Button>
+                   <div className="grid grid-cols-2 gap-3">
+                      <Button onClick={onFutureMe} variant="outline" className="h-14 rounded-2xl text-xs">
+                        {t.sendToFuture}
+                      </Button>
+                      <Button onClick={onComplete} variant="primary" className="h-14 rounded-2xl text-xs">
+                        {t.talkItOut}
+                      </Button>
+                   </div>
+                   <button onClick={onComplete} className="text-gray-400 text-xs hover:text-gray-600 transition-colors pt-4">I'm done for now, back to home</button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -726,7 +919,9 @@ const HomeTimeline = ({
   onPlayFutureMe,
   onSOS,
   lang,
-  futureMeMessages
+  futureMeMessages,
+  setView,
+  uid
 }: {
   profile: UserProfile;
   moods: MoodEntry[];
@@ -737,9 +932,26 @@ const HomeTimeline = ({
   onSOS: () => void;
   lang: Language;
   futureMeMessages: FutureMeMessage[];
+  setView: (v: string) => void;
+  uid: string;
 }) => {
+  const [flowActive, setFlowActive] = useState(false);
   const t = translations[lang];
   
+  const saveMoodDirectly = async (mood: string) => {
+    try {
+      await addDoc(collection(db, "moods"), {
+        uid,
+        mood: mood === 'overwhelmed' ? 'stressed' : mood === 'okay' ? 'neutral' : mood,
+        intensity: 5,
+        note: `Guided Home Flow: ${mood}`,
+        timestamp: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, "moods");
+    }
+  };
+
   const timeline = [
     ...moods.map(m => ({ ...m, type: 'mood' as const })),
     ...journalEntries.map(j => ({ ...j, type: 'journal' as const }))
@@ -750,120 +962,113 @@ const HomeTimeline = ({
   });
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <header className="flex justify-between items-start">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-serif font-bold text-gray-900 leading-tight">
-            {profile?.displayName?.split(' ')[0]},
-          </h1>
-          <p className="text-gray-500 font-medium">{t.howFeeling}</p>
-        </div>
-      </header>
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <AnimatePresence mode="wait">
+        {!flowActive ? (
+          <motion.div 
+            key="home-main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="space-y-12"
+          >
+            {/* Step 1: Entry */}
+            <div className="text-center space-y-12 pt-10">
+              <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 tracking-tight leading-tight">
+                {t.feelingQuestion}
+              </h1>
+              
+              <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
+                {(['overwhelmed', 'anxious', 'low', 'okay'] as const).map(m => (
+                  <Card 
+                    key={m} 
+                    onClick={() => setFlowActive(true)}
+                    className={cn(
+                      "p-10 cursor-pointer transition-all active:scale-95 flex flex-col items-center gap-4 group hover:shadow-2xl hover:shadow-primary-soft/10",
+                      m === 'overwhelmed' ? "bg-primary-strong text-white border-0" : "bg-white border-gray-100 hover:border-primary-soft/30"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-16 h-16 rounded-3xl flex items-center justify-center transition-transform group-hover:scale-110",
+                      m === 'overwhelmed' ? "bg-white/20" : "bg-primary-soft/5 text-primary-soft"
+                    )}>
+                      <MoodIcon mood={m === 'overwhelmed' ? 'stressed' : m === 'low' ? 'sad' : m === 'okay' ? 'neutral' : 'anxious'} className="w-8 h-8" />
+                    </div>
+                    <span className="font-bold text-xl">{t[m]}</span>
+                  </Card>
+                ))}
+              </div>
+            </div>
 
-      {/* SOS Lifeline */}
-      <motion.button 
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={onSOS}
-        className="w-full bg-primary-strong text-white p-6 rounded-[32px] flex items-center justify-between shadow-xl shadow-primary-soft/10 group"
-      >
-        <div className="text-left">
-          <span className="text-[10px] uppercase tracking-widest font-bold opacity-70 text-white/80">{t.sos}</span>
-          <h2 className="text-2xl font-serif font-bold">{t.overwhelmed}</h2>
-        </div>
-        <div className="bg-white/20 p-3 rounded-2xl group-hover:rotate-12 transition-transform">
-          <AlertOctagon className="w-8 h-8" />
-        </div>
-      </motion.button>
-
-      {/* Primary Actions */}
-      <div className="grid grid-cols-2 gap-4">
-          <Card onClick={onMoodClick} className="bg-pastel-green dark:bg-emerald-900/20 border-0 p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
-             <div className="w-12 h-12 bg-white dark:bg-emerald-900/50 rounded-2xl flex items-center justify-center text-primary-soft dark:text-emerald-400 shadow-sm">
-                <Smile className="w-6 h-6" />
-             </div>
-             <span className="text-xs font-bold uppercase tracking-widest text-primary-strong dark:text-emerald-300">{t.home} & {t.saveMood}</span>
-          </Card>
-          <Card onClick={onJournalClick} className="bg-primary-soft/5 dark:bg-slate-800/50 border-0 p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-primary-soft/10 dark:hover:bg-slate-800 transition-colors">
-             <div className="w-12 h-12 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center text-primary-soft dark:text-slate-300 shadow-sm">
-                <BookOpen className="w-6 h-6" />
-             </div>
-             <span className="text-xs font-bold uppercase tracking-widest text-primary-soft dark:text-slate-400">{t.journal}</span>
-          </Card>
-      </div>
-
-      {/* Future Me Prompt Integrated */}
-      {futureMeMessages.length > 0 && (
-        <Card className="bg-primary-strong p-6 text-white border-0 overflow-hidden relative group">
-          <div className="relative z-10 space-y-4">
-             <div className="flex items-center gap-2">
-                <Anchor className="w-4 h-4 text-primary-soft" />
-                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary-soft/80">{t.futureMe}</span>
-             </div>
-             <p className="text-sm font-serif italic text-white/90">"{futureMeMessages[0].prompt || t.hearVoice}"</p>
-             <Button 
-               onClick={() => onPlayFutureMe(futureMeMessages[Math.floor(Math.random() * futureMeMessages.length)])}
-               className="bg-primary-soft text-white border-0 w-full h-12 rounded-xl"
-             >
-                <Play className="w-4 h-4 fill-current" /> {t.playLifeline}
-             </Button>
-          </div>
-          <Anchor className="absolute top-0 right-0 w-32 h-32 text-white/5 -rotate-12 transition-transform group-hover:scale-110" />
-        </Card>
-      )}
-
-      {/* Timeline */}
-      <div className="space-y-6">
-        <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-1">{t.appPreferences} • {t.home}</h3>
-        {timeline.length === 0 ? (
-          <Card className="text-center py-20 bg-white/50 dark:bg-slate-900/50 border-dashed border-gray-100 dark:border-slate-800">
-             <Calendar className="w-10 h-10 mx-auto text-gray-200 dark:text-gray-600 mb-4" />
-             <p className="text-gray-400 dark:text-gray-500 text-sm max-w-[200px] mx-auto">Your timeline of healing starts today. Record your first mood or thought.</p>
-          </Card>
-        ) : (
-          <div className="space-y-8 relative before:absolute before:left-[11px] before:top-2 before:bottom-0 before:w-[2px] before:bg-primary-soft/10 dark:before:bg-primary-strong/20">
-            {timeline.map((item, i) => (
-              <motion.div 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                key={i} 
-                className="relative pl-10"
-              >
-                <div className={cn(
-                  "absolute left-0 top-1 w-[24px] h-[24px] rounded-full flex items-center justify-center z-10 shadow-sm",
-                  item.type === 'mood' ? "bg-pastel-green dark:bg-emerald-900/40 text-primary-soft dark:text-emerald-400" : "bg-primary-soft dark:bg-slate-700 text-white dark:text-slate-300"
-                )}>
-                   {item.type === 'mood' ? <MoodIcon mood={(item as MoodEntry).mood} className="w-3 h-3" /> : <BookOpen className="w-3 h-3" />}
+            {/* Timeline - Separated clearly */}
+            {timeline.length > 0 && (
+              <div className="space-y-8 pt-12 border-t border-gray-100">
+                <div className="flex items-center justify-between px-2">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">{t.appPreferences} • {t.home}</h3>
+                  <Button variant="ghost" size="sm" onClick={onJournalClick} className="text-[10px] text-gray-400">View All</Button>
                 </div>
                 
-                <div className="space-y-2">
-                   <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-2">
-                     {format(item.timestamp instanceof Date ? item.timestamp : (item.timestamp as any)?.toDate() || new Date(), 'HH:mm • MMM d')}
-                   </p>
-                   {item.type === 'mood' ? (
-                     <Card className={cn(
-                       "p-4 border-0 shadow-sm flex items-center gap-4 transition-transform hover:scale-[1.01]",
-                       (item as MoodEntry).mood === 'sad' || (item as MoodEntry).mood === 'anxious' ? "bg-primary-soft/5 dark:bg-slate-800/80" : "bg-white dark:bg-slate-800"
-                     )}>
-                        <div className="flex-1">
-                          <p className="font-bold text-gray-800 dark:text-slate-200 capitalize leading-none tracking-tight">{(item as MoodEntry).mood}</p>
-                          {(item as MoodEntry).note && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic leading-relaxed">"{(item as MoodEntry).note}"</p>}
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-primary-soft dark:text-slate-300">
-                          {(item as MoodEntry).intensity}
-                        </div>
-                     </Card>
-                   ) : (
-                     <Card className="p-5 border-0 shadow-sm bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-                        <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{(item as JournalEntry).content}</p>
-                     </Card>
-                   )}
+                <div className="space-y-8 relative before:absolute before:left-[11px] before:top-2 before:bottom-0 before:w-[2px] before:bg-primary-soft/10">
+                  {timeline.slice(0, 5).map((item, i) => (
+                    <motion.div 
+                      key={i} 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="relative pl-10"
+                    >
+                      <div className={cn(
+                        "absolute left-0 top-1 w-[24px] h-[24px] rounded-full flex items-center justify-center z-10 shadow-sm",
+                        item.type === 'mood' ? "bg-pastel-green text-primary-soft" : "bg-primary-soft text-white"
+                      )}>
+                         {item.type === 'mood' ? <MoodIcon mood={(item as MoodEntry).mood} className="w-3 h-3" /> : <BookOpen className="w-3 h-3" />}
+                      </div>
+                      <div className="space-y-1">
+                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-2">
+                           {format(item.timestamp instanceof Date ? item.timestamp : (item.timestamp as any)?.toDate() || new Date(), 'HH:mm • MMM d')}
+                         </p>
+                         <Card className="p-4 border-0 shadow-sm bg-white hover:shadow-md transition-shadow">
+                            {item.type === 'mood' ? (
+                               <div className="flex items-center gap-3">
+                                 <MoodIcon mood={(item as MoodEntry).mood} className="w-5 h-5 text-gray-600" />
+                                 <span className="text-sm font-medium text-gray-700">{t[(item as MoodEntry).mood]}</span>
+                               </div>
+                            ) : (
+                               <p className="text-sm text-gray-600 line-clamp-2">{(item as JournalEntry).content}</p>
+                            )}
+                         </Card>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-              </motion.div>
-            ))}
-          </div>
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <GuidedHomeFlow 
+            lang={lang}
+            onComplete={() => setFlowActive(false)}
+            onSaveMood={saveMoodDirectly}
+            onJournal={() => setView('journal')}
+            onFutureMe={() => setView('futureMe')}
+          />
         )}
+      </AnimatePresence>
+
+      {/* Secondary Tools Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-2 pt-12 border-t border-gray-100">
+          <Card onClick={onSOS} variant="outline" className="p-4 flex flex-col items-center gap-2 hover:bg-primary-strong hover:text-white transition-all cursor-pointer group">
+            <ShieldAlert className="w-5 h-5 text-primary-strong group-hover:text-white" />
+            <span className="text-[10px] uppercase font-bold tracking-widest">{t.sos}</span>
+          </Card>
+          <Card onClick={() => setView('calm')} variant="outline" className="p-4 flex flex-col items-center gap-2 hover:bg-emerald-500 hover:text-white transition-all cursor-pointer group">
+            <Wind className="w-5 h-5 text-emerald-500 group-hover:text-white" />
+            <span className="text-[10px] uppercase font-bold tracking-widest">{t.calm}</span>
+          </Card>
+          <Card onClick={() => setView('futureMe')} variant="outline" className="p-4 flex flex-col items-center gap-2 hover:bg-blue-500 hover:text-white transition-all cursor-pointer group">
+            <Anchor className="w-5 h-5 text-blue-500 group-hover:text-white" />
+            <span className="text-[10px] uppercase font-bold tracking-widest">{t.futureMe}</span>
+          </Card>
+          <Card onClick={() => setView('settings')} variant="outline" className="p-4 flex flex-col items-center gap-2 hover:bg-gray-800 hover:text-white transition-all cursor-pointer group">
+            <Settings className="w-5 h-5 text-gray-500 group-hover:text-white" />
+            <span className="text-[10px] uppercase font-bold tracking-widest">{t.settings}</span>
+          </Card>
       </div>
     </div>
   );
@@ -871,33 +1076,78 @@ const HomeTimeline = ({
 
 const Soundscapes = ({ lang, sukoonMode }: { lang: Language, sukoonMode?: boolean }) => {
   const t = translations[lang];
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
   const tracks = [
-    { id: 'white', title: "White Noise", yt: "nMfPqeZjc2c" },
-    { id: 'birds', title: "Morning Birds", yt: "eKFTSSKCzWA" },
-    { id: 'rain', title: "Heavy Rain", yt: "mPZkdNFkNps" },
-    { id: 'ocean', title: "Ocean Waves", yt: "f77SKdyn-1Y" }
+    { id: 'white', title: "White Noise", yt: "nMfPqeZjc2c", icon: <Cloud className="w-5 h-5" /> },
+    { id: 'birds', title: "Morning Birds", yt: "eKFTSSKCzWA", icon: <Wind className="w-5 h-5" /> },
+    { id: 'rain', title: "Heavy Rain", yt: "mPZkdNFkNps", icon: <CloudRain className="w-5 h-5" /> },
+    { id: 'ocean', title: "Ocean Waves", yt: "f77SKdyn-1Y", icon: <Waves className="w-5 h-5" /> }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {tracks.map(track => (
         <Card 
           key={track.id} 
-          className={cn("p-4 overflow-hidden border", sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100")}
+          className={cn(
+            "p-6 transition-all duration-500 group overflow-hidden relative",
+            playingId === track.id ? "ring-2 ring-primary-soft shadow-xl scale-[1.02]" : "hover:border-primary-soft/30",
+            sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100"
+          )}
         >
-          <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black relative mb-4">
-            <iframe 
-               width="100%" 
-               height="100%" 
-               src={`https://www.youtube.com/embed/${track.yt}?controls=0&showinfo=0&rel=0&autoplay=0&loop=1&playlist=${track.yt}`}
-               title={track.title} 
-               frameBorder="0" 
-               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-               className="opacity-70 pointer-events-auto"
-            />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className={cn("p-2.5 rounded-2xl transition-colors", 
+                playingId === track.id ? "bg-primary-soft text-white" : "bg-primary-soft/5 text-primary-soft"
+              )}>
+                {track.icon}
+              </div>
+              <h3 className={cn("font-bold text-lg", sukoonMode ? "text-slate-200" : "text-gray-900")}>{track.title}</h3>
+            </div>
+            <button 
+              onClick={() => setPlayingId(playingId === track.id ? null : track.id)}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                playingId === track.id ? "bg-primary-strong text-white rotate-180" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+              )}
+            >
+              {playingId === track.id ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-1" />}
+            </button>
           </div>
-          <h3 className={cn("font-bold px-2", sukoonMode ? "text-slate-200 font-mono" : "text-gray-900")}>{track.title}</h3>
+
+          <div className={cn(
+            "aspect-video w-full rounded-2xl overflow-hidden bg-black transition-all duration-700",
+            playingId === track.id ? "opacity-100 scale-100 h-auto" : "opacity-0 scale-95 h-0"
+          )}>
+            {playingId === track.id && (
+              <iframe 
+                 width="100%" 
+                 height="100%" 
+                 src={`https://www.youtube.com/embed/${track.yt}?autoplay=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${track.yt}`}
+                 title={track.title} 
+                 frameBorder="0" 
+                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                 className="opacity-60"
+              />
+            )}
+          </div>
+          
+          {playingId === track.id && (
+            <div className="mt-4 flex items-center gap-2">
+              <div className="flex gap-1">
+                {[...Array(3)].map((_, i) => (
+                  <motion.div 
+                    key={i}
+                    animate={{ height: [12, 24, 12] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                    className="w-1 bg-primary-soft rounded-full"
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] text-primary-soft font-bold uppercase tracking-widest">Now Playing</span>
+            </div>
+          )}
         </Card>
       ))}
     </div>
@@ -914,12 +1164,16 @@ const WallOfHope = ({ lang, uid, sukoonMode }: { lang: Language, uid: string, su
     const q = query(collection(db, "wallOfHope"), limit(50));
     return onSnapshot(q, (snap) => {
       const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }) as WallOfHopeMessage);
-      setMessages(msgs.sort((a,b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)));
+      setMessages(msgs.sort((a,b) => {
+        const timeA = (a.createdAt as any)?.toDate?.() || new Date(0);
+        const timeB = (b.createdAt as any)?.toDate?.() || new Date(0);
+        return timeB - timeA;
+      }));
     });
   }, []);
 
   const post = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || sending) return;
     setSending(true);
     try {
       await addDoc(collection(db, "wallOfHope"), {
@@ -943,52 +1197,83 @@ const WallOfHope = ({ lang, uid, sukoonMode }: { lang: Language, uid: string, su
   };
 
   return (
-    <div className="space-y-8 max-w-xl mx-auto">
-       <div className={cn("p-6 rounded-[32px] space-y-4", sukoonMode ? "bg-slate-900 border border-slate-800" : "bg-pastel-green")}>
-          <p className={cn("text-xs font-bold uppercase tracking-widest", sukoonMode ? "text-slate-500" : "text-primary-strong/60")}>{t.wallOfHope}</p>
+    <div className="space-y-12 max-w-2xl mx-auto">
+       <div className={cn(
+         "p-10 rounded-[40px] space-y-6 shadow-2xl relative overflow-hidden", 
+         sukoonMode ? "bg-slate-900 border border-slate-800" : "bg-white border-0"
+       )}>
+          {!sukoonMode && <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 to-primary-soft" />}
+          <div className="space-y-2">
+            <h3 className={cn("text-2xl font-serif font-bold", sukoonMode ? "text-slate-200" : "text-gray-900")}>{t.wallOfHope}</h3>
+            <p className="text-gray-400 text-sm">Leave a kind word for a stranger.</p>
+          </div>
+
           <textarea 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.whatsOnMind}
-            className={cn("w-full rounded-2xl p-4 text-sm border-none focus:ring-2 outline-none min-h-[100px]", 
-              sukoonMode ? "bg-slate-800 text-slate-200 focus:ring-slate-700 placeholder:text-slate-500" : "bg-white/50 focus:ring-primary-soft/20 text-gray-900"
+            className={cn("w-full rounded-[24px] p-6 text-lg border-0 focus:ring-2 outline-none min-h-[120px] transition-all", 
+              sukoonMode ? "bg-slate-800 text-slate-200 focus:ring-slate-700 placeholder:text-slate-600" : "bg-gray-50 focus:ring-primary-soft/20 text-gray-900 placeholder:text-gray-300"
             )}
           />
+          
           <Button 
             onClick={post} 
             disabled={sending || !input.trim()} 
-            className={cn("w-full h-12 rounded-xl border-0", sukoonMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "")}
+            className={cn(
+              "w-full h-14 rounded-2xl border-0 text-base font-bold transition-all active:scale-95 shadow-lg",
+              sukoonMode ? "bg-slate-700 text-slate-200" : "bg-primary-strong text-white shadow-primary-soft/20"
+            )}
           >
-             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Post Anonymously"}
+             {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Post to the Wall"}
           </Button>
        </div>
 
-       <div className="flex flex-col space-y-6">
+       <div className="grid grid-cols-1 gap-6">
           {messages.map(m => (
-            <div key={m.id} className={cn("rounded-3xl p-6 border shadow-sm transition-all", sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-primary-soft/10")}>
-               <div className="flex items-center gap-3 mb-4">
-                 <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", sukoonMode ? "bg-slate-800" : "bg-gradient-to-tr from-primary-soft/50 to-primary-soft/20")}>
-                   <UserIcon className={cn("w-5 h-5", sukoonMode ? "text-slate-500" : "text-white")} />
+            <motion.div 
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              key={m.id} 
+              className={cn(
+                "rounded-[32px] p-8 border shadow-sm transition-all relative group", 
+                sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100 hover:shadow-xl hover:-translate-y-1"
+              )}
+            >
+               <div className="flex items-center gap-4 mb-6">
+                 <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", sukoonMode ? "bg-slate-800" : "bg-primary-soft/10")}>
+                   <UserIcon className={cn("w-6 h-6", sukoonMode ? "text-slate-500" : "text-primary-soft")} />
                  </div>
                  <div>
-                   <p className={cn("text-sm font-bold", sukoonMode ? "text-slate-300 font-mono" : "text-gray-900")}>Anonymous</p>
-                   <p className={cn("text-xs uppercase tracking-widest", sukoonMode ? "text-slate-500 font-mono" : "text-gray-400 font-bold")}>{m.authorLang}</p>
+                   <p className={cn("text-base font-bold", sukoonMode ? "text-slate-300" : "text-gray-900")}>Stranger</p>
+                   <p className={cn("text-[10px] uppercase font-bold tracking-widest text-gray-400")}>
+                     Shared in {translations[m.authorLang as Language]?.appPreferences || m.authorLang}
+                   </p>
                  </div>
                </div>
                
-               <p className={cn("text-base leading-relaxed mb-6 pl-2", sukoonMode ? "text-slate-200" : "text-gray-700 italic")}>"{m.text}"</p>
+               <p className={cn("text-xl leading-relaxed mb-8", sukoonMode ? "text-slate-200" : "text-gray-700 italic font-serif")}>"{m.text}"</p>
                
-               <div className={cn("flex items-center gap-4 pt-4 border-t", sukoonMode ? "border-slate-800" : "border-gray-50")}>
-                 <button onClick={() => like(m)} className={cn("flex items-center gap-1.5 text-sm transition-colors font-bold", 
-                    sukoonMode 
-                      ? (m.likes > 0 ? "text-red-400" : "text-slate-500 hover:text-slate-400") 
-                      : (m.likes > 0 ? "text-red-500" : "text-primary-soft/40 hover:text-primary-soft")
-                 )}>
-                    <Heart className={cn("w-4 h-4", m.likes > 0 && "fill-current")} />
-                    {m.likes || 0}
+               <div className="flex items-center justify-between">
+                 <button 
+                  onClick={() => like(m)} 
+                  className={cn(
+                    "flex items-center gap-2 py-2 px-4 rounded-full transition-all group/btn",
+                    m.likes > 0 
+                      ? "bg-red-50 text-red-500" 
+                      : (sukoonMode ? "bg-slate-800 text-slate-500 hover:text-slate-300" : "bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500")
+                  )}
+                 >
+                    <Heart className={cn("w-5 h-5 transition-transform group-active/btn:scale-125", m.likes > 0 && "fill-current")} />
+                    <span className="font-bold">{m.likes || 0}</span>
                  </button>
+                 
+                 <p className="text-[10px] text-gray-300 uppercase font-bold tracking-widest">
+                   {format((m.createdAt as any)?.toDate?.() || new Date(), 'MMM d')}
+                 </p>
                </div>
-            </div>
+            </motion.div>
           ))}
        </div>
     </div>
@@ -1523,6 +1808,8 @@ function SukoonApp() {
               onPlayFutureMe={(msg) => setActivePlaybackMessage(msg)}
               onSOS={startPanicMode}
               lang={lang}
+              setView={setView}
+              uid={user.uid}
             />
           )}
 
