@@ -69,6 +69,54 @@ import { chatWithSukoon, detectCrisis, transcribeAudio, detectPatterns, generate
 
 // --- Components ---
 
+const CalmingBackground = () => (
+  <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
+    <motion.div 
+      animate={{ 
+        x: [0, 100, -50, 0], 
+        y: [0, 50, 100, 0],
+        scale: [1, 1.2, 0.9, 1],
+        rotate: [0, 45, -45, 0]
+      }}
+      transition={{ 
+        duration: 40, 
+        repeat: Infinity, 
+        ease: "linear" 
+      }}
+      className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-primary-soft/10 blur-[120px]"
+    />
+    <motion.div 
+      animate={{ 
+        x: [0, -120, 60, 0], 
+        y: [0, 80, -40, 0],
+        scale: [1, 1.3, 1.1, 1],
+        rotate: [0, -30, 30, 0]
+      }}
+      transition={{ 
+        duration: 50, 
+        repeat: Infinity, 
+        delay: 2,
+        ease: "linear" 
+      }}
+      className="absolute top-[30%] -right-[15%] w-[55%] h-[55%] rounded-full bg-primary-soft/10 blur-[100px]"
+    />
+    <motion.div 
+      animate={{ 
+        x: [0, 80, -100, 0], 
+        y: [0, -120, 50, 0],
+        scale: [1, 1.1, 1.2, 1]
+      }}
+      transition={{ 
+        duration: 45, 
+        repeat: Infinity, 
+        delay: 5,
+        ease: "linear" 
+      }}
+      className="absolute -bottom-[15%] left-[15%] w-[45%] h-[45%] rounded-full bg-primary-strong/5 blur-[80px]"
+    />
+  </div>
+);
+
 const Button = ({ 
   children, 
   className, 
@@ -686,6 +734,7 @@ function SukoonApp() {
   const [activeIntervention, setActiveIntervention] = useState<Intervention | null>(null);
   const [activePlaybackMessage, setActivePlaybackMessage] = useState<FutureMeMessage | null>(null);
   const [isSOSActive, setIsSOSActive] = useState(false);
+  const [showConfigError, setShowConfigError] = useState(false);
 
   useEffect(() => {
     // Test connection
@@ -693,8 +742,9 @@ function SukoonApp() {
       try {
         await getDocFromServer(doc(db, 'test', 'connection'));
       } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
+        if(error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('invalid-argument'))) {
           console.error("Please check your Firebase configuration.");
+          setShowConfigError(true);
         }
       }
     };
@@ -874,28 +924,42 @@ function SukoonApp() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-cream gap-4">
-        <div className="relative">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FDFCF9] gap-4 relative overflow-hidden">
+        <CalmingBackground />
+        <div className="relative z-10">
           <Loader2 className="w-8 h-8 animate-spin text-primary-soft" />
           <div className="absolute inset-0 blur-xl bg-primary-soft/20 animate-pulse" />
         </div>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 animate-pulse">finding peace...</p>
+        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 animate-pulse relative z-10">finding peace...</p>
       </div>
     );
   }
 
-  if (!user) return <LoginView />;
+  if (!user) return <div className="min-h-screen relative overflow-hidden"><CalmingBackground /><LoginView /></div>;
 
   if (profile && !profile.onboardingComplete) {
-    return <OnboardingView profile={profile} onComplete={() => setProfile(p => p ? ({ ...p, onboardingComplete: true }) : null)} />;
+    return <div className="min-h-screen relative overflow-hidden"><CalmingBackground /><OnboardingView profile={profile} onComplete={() => setProfile(p => p ? ({ ...p, onboardingComplete: true }) : null)} /></div>;
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFCF9] text-gray-900 pb-24 md:pb-0 md:pl-20">
+    <div className="min-h-screen bg-[#FDFCF9] text-gray-900 pb-24 md:pb-0 md:pl-20 relative overflow-hidden">
+      <CalmingBackground />
       {/* Sidebar / Bottom Nav */}
       <Navigation view={view} setView={setView} />
 
-      <main className="max-w-4xl mx-auto p-6 md:p-12">
+      {showConfigError && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-orange-50 border-b border-orange-100 p-3 flex items-center justify-center gap-4 animate-in slide-in-from-top duration-500">
+          <ShieldAlert className="w-5 h-5 text-orange-500" />
+          <p className="text-xs text-orange-700 font-medium">
+            Firebase Connection Issue: Please ensure you've clicked <span className="font-bold">"Create Database"</span> in your Firebase Console and enabled <span className="font-bold">Google Auth</span>.
+          </p>
+          <button onClick={() => setShowConfigError(false)} className="text-orange-900/40 hover:text-orange-900 transition-colors">
+            <Plus className="w-4 h-4 rotate-45" />
+          </button>
+        </div>
+      )}
+
+      <main className="max-w-4xl mx-auto p-6 md:p-12 relative z-10">
         <AnimatePresence mode="wait">
           {view === 'home' && (
             <motion.div 
@@ -1109,7 +1173,7 @@ function SukoonApp() {
 
 function LoginView() {
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-[#FDFCF9]">
+    <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-transparent relative z-10">
       <div className="w-full max-w-md text-center space-y-8">
         <div className="space-y-2">
           <div className="bg-primary-soft w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-primary-soft/20">
@@ -1152,7 +1216,7 @@ function OnboardingView({ profile, onComplete }: { profile: UserProfile, onCompl
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-[#FDFCF9]">
+    <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-transparent relative z-10">
       <motion.div 
         key={step} 
         initial={{ opacity: 0, x: 20 }}
@@ -1316,7 +1380,7 @@ function ChatView({ profile, onNewIntervention }: { profile: UserProfile, onNewI
   };
 
   return (
-    <div className="fixed inset-0 bg-[#FDFCF9] z-50 flex flex-col md:static md:inset-auto md:h-[80vh]">
+    <div className="fixed inset-0 bg-transparent z-50 flex flex-col md:static md:inset-auto md:h-[80vh]">
       <header className="p-4 border-b flex items-center justify-between bg-white/80 backdrop-blur shrink-0">
         <div className="flex flex-col">
           <span className="font-serif font-bold text-lg">Talk it out</span>
