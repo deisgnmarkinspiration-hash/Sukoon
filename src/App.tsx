@@ -62,56 +62,61 @@ export default function App() {
 
   return (
     <div className={cn(
-      "min-h-[100dvh] transition-colors duration-1000 overflow-x-hidden relative flex flex-col",
+      "h-[100dvh] w-screen transition-colors duration-1000 overflow-hidden relative flex flex-col",
       sukoonMode ? "bg-slate-950 text-slate-100" : "bg-pastel-green text-gray-900"
     )}>
       {sukoonMode && <div className="fixed inset-0 z-0 atmosphere opacity-30 pointer-events-none" />}
       
-      {/* Navigation Header */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-4 py-2 sm:px-6 sm:py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-           <div className="flex items-center gap-3">
-              <div className={cn(
-                "w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transform -rotate-12 transition-colors",
-                sukoonMode ? "bg-primary-strong/30 border border-primary-strong/20" : "bg-primary-strong"
-              )}>
-                 <CloudRain className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-serif font-bold tracking-tight">Sukoon</span>
-           </div>
-           
-           <div className={cn(
-              "flex items-center backdrop-blur-xl border p-1.5 rounded-2xl shadow-sm transition-all",
-              sukoonMode ? "bg-slate-900/60 border-slate-800" : "bg-white/40 border-white/50"
-           )}>
-              <NavButton icon={<HomeIcon />} active={view === 'home'} onClick={() => setView('home')} sukoon={sukoonMode} />
-              <NavButton icon={<BookOpen />} active={view === 'journal'} onClick={() => setView('journal')} sukoon={sukoonMode} />
-              <NavButton icon={<MessageSquare />} active={view === 'chat'} onClick={() => setView('chat')} sukoon={sukoonMode} />
-              <NavButton icon={<SettingsIcon />} active={view === 'settings'} onClick={() => setView('settings')} sukoon={sukoonMode} />
-           </div>
-        </div>
-      </nav>
+      {/* App Top Bar */}
+      <header className="absolute top-0 left-0 right-0 z-40 px-6 py-4 flex items-center justify-between pointer-events-none">
+         <div className="flex items-center gap-2 pointer-events-auto">
+            <div className={cn(
+              "w-8 h-8 rounded-xl flex items-center justify-center shadow-md transform -rotate-12 transition-colors",
+              sukoonMode ? "bg-primary-strong/30 border border-primary-strong/20" : "bg-primary-strong"
+            )}>
+               <CloudRain className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-lg font-serif font-bold tracking-tight">Sukoon</span>
+         </div>
+         {/* Optional: Add a small user avatar or just keep it minimal */}
+      </header>
 
-      <main className="max-w-5xl mx-auto pt-20 sm:pt-28 px-4 sm:px-6 flex-1 relative z-10 w-full">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={view}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          >
-            {view === 'home' && <HomeTimeline onSOS={() => setView('calm')} setView={setView} />}
-            {view === 'calm' && <CalmSanctuary />}
-            {view === 'chat' && <GeminiChat />}
-            {view === 'journal' && <JournalView />}
-            {view === 'settings' && <SettingsView />}
-            {view === 'futureMe' && <FutureMeView />}
-          </motion.div>
-        </AnimatePresence>
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto overflow-x-hidden pt-20 pb-28 px-4 sm:px-6 relative z-10 w-full scroll-smooth">
+        <div className="max-w-4xl mx-auto w-full h-full">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={view}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+              className="min-h-full"
+            >
+              {view === 'home' && <HomeTimeline onSOS={() => setView('calm')} setView={setView} />}
+              {view === 'calm' && <CalmSanctuary />}
+              {view === 'chat' && <GeminiChat />}
+              {view === 'journal' && <JournalView />}
+              {view === 'settings' && <SettingsView />}
+              {view === 'futureMe' && <FutureMeView />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
 
-      {/* Global Modals or FAB could go here */}
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-6 pt-4 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-slate-950 dark:via-slate-950/90 pb-safe">
+        <div className={cn(
+          "max-w-md mx-auto flex items-center justify-between px-6 py-3 rounded-full shadow-2xl backdrop-blur-xl border transition-all",
+           sukoonMode ? "bg-slate-900/80 border-slate-800" : "bg-white/80 border-white"
+        )}>
+          <NavButton icon={<HomeIcon />} label="Home" active={view === 'home'} onClick={() => setView('home')} sukoon={sukoonMode} />
+          <NavButton icon={<BookOpen />} label="Journal" active={view === 'journal'} onClick={() => setView('journal')} sukoon={sukoonMode} />
+          <NavButton icon={<CloudRain />} label="Calm" active={view === 'calm'} onClick={() => setView('calm')} sukoon={sukoonMode} />
+          <NavButton icon={<MessageSquare />} label="Chat" active={view === 'chat'} onClick={() => setView('chat')} sukoon={sukoonMode} />
+          <NavButton icon={<SettingsIcon />} label="Settings" active={view === 'settings'} onClick={() => setView('settings')} sukoon={sukoonMode} />
+        </div>
+      </nav>
     </div>
   );
 }
@@ -158,7 +163,7 @@ const JournalView = () => {
         <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "text-white" : "text-gray-900")}>{t.journal}</h2>
         <p className="text-gray-500">A timeline of your reflections and deep thoughts.</p>
       </header>
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {journalEntries.map(entry => (
           <Card key={entry.id} className={cn("p-8 hover:shadow-xl transition-all border-0 shadow-sm", sukoonMode ? "bg-slate-900/50" : "bg-white")}>
             <div className="flex justify-between items-start mb-4">
@@ -203,7 +208,7 @@ const SettingsView = () => {
   const { lang, setLang, sukoonMode, setSukoonMode } = useAppStore();
   const t = translations[lang];
   return (
-    <div className="space-y-10 max-w-xl mx-auto">
+    <div className="space-y-10 max-w-2xl mx-auto">
       <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "text-white" : "text-gray-900")}>Settings</h2>
       <Card className={cn("divide-y border-0 shadow-sm transition-all", sukoonMode ? "bg-slate-900/50 divide-slate-800" : "bg-white divide-gray-50")}>
         <div className="p-8 flex items-center justify-between">
@@ -326,17 +331,30 @@ const OnboardingView = ({ onComplete }: { onComplete: () => void }) => {
 
 // --- Helpers ---
 
-const NavButton = ({ icon, active, onClick, sukoon }: { icon: any, active: boolean, onClick: () => void, sukoon?: boolean }) => (
+const NavButton = ({ icon, label, active, onClick, sukoon }: { icon: any, label?: string, active: boolean, onClick: () => void, sukoon?: boolean }) => (
   <button 
     onClick={onClick}
     className={cn(
-      "w-12 h-12 flex items-center justify-center rounded-xl transition-all",
+      "flex flex-col items-center justify-center p-2 rounded-xl transition-all relative overflow-hidden group w-14",
       active 
-        ? (sukoon ? "bg-primary-strong/40 text-white shadow-lg border border-primary-strong/30" : "bg-primary-strong text-white shadow-lg") 
-        : (sukoon ? "text-slate-500 hover:text-primary-soft" : "text-gray-400 hover:text-primary-soft")
+        ? (sukoon ? "text-primary-soft" : "text-primary-strong") 
+        : (sukoon ? "text-slate-500 hover:text-slate-300" : "text-gray-400 hover:text-gray-700")
     )}
   >
-    {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" }) : icon}
+    <div className={cn(
+      "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+      active && (sukoon ? "bg-primary-strong/20" : "bg-primary-soft/10")
+    )}>
+      {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: cn("w-5 h-5", active && "scale-110 duration-300") }) : icon}
+    </div>
+    {label && (
+      <span className={cn(
+        "text-[9px] font-bold mt-1 transition-all",
+        active ? "opacity-100 uppercase tracking-wide" : "opacity-0 h-0 w-0 group-hover:opacity-100 overflow-hidden"
+      )}>
+        {label}
+      </span>
+    )}
   </button>
 );
 

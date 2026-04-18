@@ -155,7 +155,7 @@ const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMod
   };
 
   return (
-    <div className="space-y-10 max-w-3xl mx-auto">
+    <div className="space-y-10 max-w-4xl mx-auto">
       <Card className={cn("p-10 border-0 shadow-2xl shadow-primary-soft/10 overflow-hidden relative", sukoonMode ? "bg-slate-900" : "bg-white")}>
         {!sukoonMode && <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-teal-400 via-primary-soft to-indigo-400" />}
         <div className="space-y-6">
@@ -178,7 +178,7 @@ const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMod
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl mx-auto">
         {messages.map((m, i) => {
           const hasLiked = likedMessageIds.has(m.id!);
           return (
@@ -246,7 +246,7 @@ const DistractTasks = ({ sukoonMode }: { sukoonMode: boolean }) => {
     <div className="max-w-2xl mx-auto min-h-[400px] flex items-center justify-center">
       <AnimatePresence mode="wait">
         {task === 'none' ? (
-          <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-2 gap-6 w-full">
+          <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-xl mx-auto">
             <Card 
               onClick={() => { setTask('rhythm'); setCount(0); }}
               className={cn("p-10 cursor-pointer text-center group transition-all h-[240px] flex flex-col items-center justify-center gap-4", sukoonMode ? "bg-slate-900 border-slate-800" : "hover:border-primary-soft/30 hover:shadow-2xl")}

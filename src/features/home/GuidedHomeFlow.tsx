@@ -103,7 +103,7 @@ export const GuidedHomeFlow = ({
             <h2 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 tracking-tight leading-tight">
               {t.feelingQuestion}
             </h2>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
               {(['overwhelmed', 'anxious', 'low', 'okay'] as const).map(m => (
                 <MoodOption 
                   key={m} 
@@ -243,20 +243,20 @@ const MoodOption = React.memo(({ mood, label, isSelected, onSelect }: { mood: st
     <Card 
       onClick={() => onSelect(mood)}
       className={cn(
-        "p-10 cursor-pointer shadow-sm border-2 transition-all active:scale-95 flex flex-col items-center gap-6 group relative overflow-hidden bg-white",
+        "p-4 sm:p-10 cursor-pointer shadow-sm border-2 transition-all active:scale-95 flex flex-col items-center gap-3 sm:gap-6 group relative overflow-hidden bg-white",
         isSelected 
           ? "border-primary-soft shadow-2xl ring-4 ring-primary-soft/5 z-20 scale-105" 
           : "border-gray-50 hover:border-gray-100 hover:shadow-lg hover:-translate-y-1 opacity-90 hover:opacity-100"
       )}
     >
       <div className={cn(
-        "w-20 h-20 rounded-[32px] flex items-center justify-center transition-all duration-500 shadow-inner",
+        "w-14 h-14 sm:w-20 sm:h-20 rounded-[22px] sm:rounded-[32px] flex items-center justify-center transition-all duration-500 shadow-inner",
         isSelected ? activeColors[mood] : "bg-gray-50 text-gray-400 group-hover:bg-primary-soft/5 group-hover:text-primary-soft"
       )}>
-         <MoodIcon mood={mood} className="w-10 h-10" />
+         <MoodIcon mood={mood} className="w-8 h-8 sm:w-10 sm:h-10" />
       </div>
       <span className={cn(
-        "font-bold text-2xl transition-colors",
+        "font-bold text-base sm:text-2xl transition-colors",
         isSelected ? "text-gray-900" : "text-gray-400 group-hover:text-gray-600"
       )}>{label}</span>
     </Card>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
-import { Smile, BookOpen, Calendar, ShieldAlert, Wind, Anchor, Settings, Play, X, Filter, SortDesc, SortAsc } from 'lucide-react';
+import { Smile, BookOpen, Calendar, ShieldAlert, Wind, Settings, Play, X, Filter, SortDesc, SortAsc } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
@@ -98,19 +98,19 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
                 </h1>
               </div>
               
-              <div className="grid grid-cols-2 gap-6 max-w-3xl mx-auto px-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 max-w-3xl mx-auto px-4">
                 {(['overwhelmed', 'anxious', 'low', 'okay'] as const).map(m => (
                   <Card 
                     key={m} 
                     onClick={() => handleStartFlow(m)}
                     className={cn(
-                      "p-12 cursor-pointer transition-all active:scale-95 flex flex-col items-center gap-6 group hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden",
+                      "p-4 sm:p-10 cursor-pointer transition-all active:scale-95 flex flex-col items-center gap-3 sm:gap-6 group hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden",
                       sukoonMode ? "bg-slate-900 border-slate-800 text-slate-300" : "bg-white border-gray-50 hover:border-primary-soft/20 text-gray-900"
                     )}
                   >
                     {!sukoonIcon(m) && <SparklesBackground />}
                     <div className={cn(
-                      "w-20 h-20 rounded-[32px] flex items-center justify-center transition-all duration-500 shadow-inner z-10",
+                      "w-14 h-14 sm:w-20 sm:h-20 rounded-[22px] sm:rounded-[32px] flex items-center justify-center transition-all duration-500 shadow-inner z-10",
                       m === 'overwhelmed' ? "bg-rose-50 text-rose-500" : 
                       m === 'anxious' ? "bg-amber-50 text-amber-500" :
                       m === 'low' ? "bg-indigo-50 text-indigo-500" :
@@ -118,7 +118,7 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
                     )}>
                        {sukoonIcon(m)}
                     </div>
-                    <span className="font-bold text-2xl z-10">{t[m]}</span>
+                    <span className="font-bold text-base sm:text-2xl z-10">{t[m]}</span>
                   </Card>
                 ))}
               </div>
@@ -210,14 +210,6 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
         )}
       </AnimatePresence>
 
-      {/* Floating Action Bar / Tools Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 pt-16 border-t border-gray-50">
-          <ToolCard onClick={onSOS} icon={<ShieldAlert className="text-primary-strong" />} label={t.sos} color="primary" />
-          <ToolCard onClick={() => setView('calm')} icon={<Wind className="text-emerald-500" />} label={t.calm} color="emerald" />
-          <ToolCard onClick={() => setView('futureMe')} icon={<Anchor className="text-blue-500" />} label={t.futureMe} color="blue" />
-          <ToolCard onClick={() => setView('settings')} icon={<Settings className="text-gray-500" />} label={t.settings} color="gray" />
-      </div>
-
       <AnimatePresence>
         {editingMood && (
           <motion.div
@@ -276,27 +268,6 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
   );
 };
 
-const ToolCard = ({ onClick, icon, label, color }: { onClick: () => void, icon: any, label: string, color: string }) => {
-  const colors: Record<string, string> = {
-    primary: "hover:bg-primary-strong group-hover:text-white",
-    emerald: "hover:bg-emerald-500",
-    blue: "hover:bg-blue-500",
-    gray: "hover:bg-gray-800"
-  };
-
-  return (
-    <Card onClick={onClick} variant="outline" className={cn(
-      "p-6 flex flex-col items-center gap-3 transition-all cursor-pointer group hover:scale-[1.05] hover:shadow-xl",
-      colors[color]
-    )}>
-      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center bg-gray-50 group-hover:bg-white/20 group-hover:rotate-12 transition-all")}>
-         {icon}
-      </div>
-      <span className="text-[10px] uppercase font-bold tracking-[0.2em] group-hover:text-white transition-colors">{label}</span>
-    </Card>
-  );
-}
-
 const SparklesBackground = () => (
    <div className="absolute inset-0 z-0 pointer-events-none opacity-20 group-hover:opacity-40 transition-opacity">
       {[...Array(6)].map((_, i) => (
@@ -313,10 +284,10 @@ const SparklesBackground = () => (
 
 const sukoonIcon = (mood: string) => {
   switch (mood) {
-    case 'overwhelmed': return <ShieldAlert className="w-10 h-10" />;
-    case 'anxious': return <Wind className="w-10 h-10" />;
-    case 'low': return <Smile className="w-10 h-10" />;
-    case 'okay': return <Sparkles className="w-10 h-10" />;
+    case 'overwhelmed': return <ShieldAlert className="w-8 h-8 sm:w-10 sm:h-10" />;
+    case 'anxious': return <Wind className="w-8 h-8 sm:w-10 sm:h-10" />;
+    case 'low': return <Smile className="w-8 h-8 sm:w-10 sm:h-10" />;
+    case 'okay': return <Sparkles className="w-8 h-8 sm:w-10 sm:h-10" />;
     default: return null;
   }
 }
