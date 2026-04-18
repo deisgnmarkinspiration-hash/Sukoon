@@ -1,216 +1,106 @@
-import { GoogleGenAI } from "@google/genai";
-import { ChatMessage, UserProfile, MoodEntry, JournalEntry } from "../types";
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Language } from '@/src/types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const API_KEY = process.env.GEMINI_API_KEY;
 
-const SYSTEM_INSTRUCTION = `
-You are Sukoon, a culturally grounded, crisis-aware mental wellness companion for people in South Asia. 
-Your goal is to provide a safe, anonymous space for reflection, guided self-help, and emotional support.
-
-Core Principles:
-1. SAFE & COMPASSIONATE: Always use an empathetic, calm, and non-judgmental tone.
-2. CULTURALLY GROUNDED: Deeply understand South Asian stressors:
-   - Exam pressure and academic burnout.
-   - Parental expectations and family honor/conflicts.
-   - Career uncertainty and post-graduation "what next" anxiety.
-   - Social comparison fatigue (weddings, wealth, social status).
-   - Arranged marriage dynamics, sensitivity around relationships.
-3. NON-CLINICAL: You are a companion, NOT a therapist.
-4. CRISIS AWARE: Redirect serious crisis to localized help (India, Pakistan, Bangladesh, etc.).
-5. MULTILINGUAL: Default to the user's preferred language (English, Hindi, Urdu).
-
-Special Modes:
-- SILENT MODE: If user is in silent mode, provide minimalist, 1-line gentle reflections and checks-ins. Less therapy, more "just being there."
-- MICRO-INTERVENTIONS: Provide 30-90s grounding or reframing exercises when high stress/spiral is detected.
-- DECISION CLARITY: Help structure thinking for life decisions without deciding for them.
-`;
-
-
-export class GeminiQuotaExceededError extends Error {
-  constructor() {
-    super("Quota exceeded");
-    this.name = "GeminiQuotaExceededError";
-  }
+if (!API_KEY) {
+  console.error('GEMINI_API_KEY is not defined in environment variables');
 }
 
-function handleGeminiError(error: any) {
-  if (error?.status === 429 || error?.code === 429 || error?.message?.includes('429')) {
-    console.error("Gemini Quota Exceeded:", error);
-    throw new GeminiQuotaExceededError();
-  }
-  console.error("Gemini API Error:", error);
-  throw error;
+const genAI = new GoogleGenerativeAI(API_KEY || '');
+
+export interface AIServiceResponse {
+  text: string;
+  error?: string;
 }
 
-export async function chatWithSukoon(history: ChatMessage[], message: string, profile: UserProfile) {
-  const language = profile.preferredLanguage || "en";
-  const silentPrompt = profile.silentMode ? "\nUser is in SILENT MODE. Respond with ONLY one short, gentle, empathetic sentence." : "";
-  
-  try {
-    const model = ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: [
-        ...history,
-        { role: "user", parts: [{ text: message }] }
-      ],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION + `\nPlease respond primarily in ${language}. Use Roman script for Hindi/Urdu if appropriate.${silentPrompt}`
-      }
-    });
+/**
+ * Production-grade Gemini service with retries and validation.
+ */
+export const geminiService = {
+  /**
+   * Generates a reassurance message based on mood and reflection.
+   */
+  getReassurance: async (
+    mood: string, 
+    reflection: string, 
+    lang: Language, 
+    retries = 1
+  ): Promise<AIServiceResponse> => {
+    const prompt = `
+      Context: Mental health support app (South Asia focus, casual, warm)
+      User feels: ${mood}
+      What's happening: ${reflection}
+      Respond in ${lang === 'en' ? 'English' : lang === 'hi' ? 'Hindi' : 'Urdu'}.
+      Rules:
+      - 2-3 short sentences
+      - calm, human tone
+      - no clinical language
+      - validate feeling
+      - provide one tiny, actionable suggestion (e.g., wash face, drink water, write one thing)
+    `;
 
-    const response = await model;
-    return response.text;
-  } catch (error) {
-    handleGeminiError(error);
-  }
-}
+    return geminiService._callAI(prompt, retries);
+  },
 
-export async function detectPatterns(history: ChatMessage[], moods: MoodEntry[], journals: JournalEntry[]): Promise<any[]> {
-  const data = {
-    chatHistory: history.slice(-20),
-    recentMoods: moods.slice(-10),
-    recentJournal: journals.slice(-5).map(j => j.content)
-  };
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: `Analyze these mental wellness logs for repeating patterns, triggers, or strengths.
-      Identify 1-3 specific observations.
-      Return as a JSON array of objects with keys: patternName, observation, type (trigger|strength|insight).
-      
-      Data: ${JSON.stringify(data)}`,
-      config: {
-        responseMimeType: "application/json",
-      }
+  /**
+   * General chat handler for the "Talk it out" feature.
+   */
+  chat: async (
+    history: { role: 'user' | 'model'; parts: { text: string }[] }[],
+    message: string,
+    lang: Language,
+    retries = 1
+  ): Promise<AIServiceResponse> => {
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const chat = model.startChat({
+      history,
+      generationConfig: {
+        maxOutputTokens: 500,
+      },
     });
 
     try {
-      return JSON.parse(response.text || "[]");
-    } catch (e) {
-      return [];
-    }
-  } catch (error) {
-    handleGeminiError(error);
-    return [];
-  }
-}
-
-export async function generateIntervention(mood: string, trigger: string): Promise<any> {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Create a 60-90 second micro-intervention for a user feeling ${mood} due to ${trigger}.
-      The intervention should have 3-4 simple steps (grounding, breathing, or reframing).
-      Return as JSON: { title: string, type: string, tone: string, steps: [{ text: string, duration: number }] }`,
-      config: {
-        responseMimeType: "application/json",
+      const result = await chat.sendMessage(message);
+      const response = await result.response;
+      return { text: response.text() };
+    } catch (error: any) {
+      if (retries > 0) {
+        console.warn('AI Chat failed, retrying...', error);
+        return geminiService.chat(history, message, lang, retries - 1);
       }
-    });
+      return { 
+        text: '', 
+        error: error.message || 'Failed to connect to AI service. Please try again.' 
+      };
+    }
+  },
+
+  /**
+   * Internal helper for AI calls with retry logic.
+   */
+  _callAI: async (prompt: string, retries: number): Promise<AIServiceResponse> => {
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     try {
-      return JSON.parse(response.text || "{}");
-    } catch (e) {
-      return null;
-    }
-  } catch (error) {
-    handleGeminiError(error);
-    return null;
-  }
-}
+      const result = await Promise.race([
+        model.generateContent(prompt),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('AI Request timeout')), 10000))
+      ]);
 
-export async function structureDecision(problem: string): Promise<any> {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: `Structure thinking for this decision: "${problem}". 
-      Do NOT decide for them. Use future projection and fear vs logic separation.
-      Return as JSON: { problem: string, analysis: { prosCons: [{ text: string, weight: number }], fearVsLogic: [{ fear: string, logic: string }], futureProjection: string } }`,
-      config: {
-        responseMimeType: "application/json",
+      if ('response' in result) {
+        const response = await result.response;
+        return { text: response.text() };
       }
-    });
-
-    try {
-      return JSON.parse(response.text || "{}");
-    } catch (e) {
-      return null;
-    }
-  } catch (error) {
-    handleGeminiError(error);
-    return null;
-  }
-}
-
-export async function detectCrisis(message: string): Promise<boolean> {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Analyze the following message for high-risk signals (self-harm, suicide, severe violence). 
-      Reply with only "TRUE" if there is a crisis signal, or "FALSE" if it is safe.
-      
-      Message: "${message}"`,
-    });
-
-    return response.text?.trim().toUpperCase() === "TRUE";
-  } catch (error) {
-    handleGeminiError(error);
-    return false;
-  }
-}
-
-export async function transcribeAudio(base64Data: string, mimeType: string): Promise<string> {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        {
-          parts: [
-            { text: "Transcribe the following audio message accurately. Return ONLY the transcribed text without any preamble." },
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType
-              }
-            }
-          ]
-        }
-      ]
-    });
-
-    return response.text?.trim() || "";
-  } catch (error) {
-    handleGeminiError(error);
-    return "";
-  }
-}
-
-export async function generateWisdom(lang: string, mood?: string): Promise<{ text: string, author: string, context?: string }> {
-  const prompt = mood 
-    ? `Generate a culturally resonant, calming piece of wisdom or poetry (2-4 lines) for someone feeling ${mood} in ${lang}. 
-       It could be a quote from a South Asian philosopher (like Rumi, Ghalib, Kabir, Iqbal) or contemporary mindfulness.
-       Return as JSON: { text: string, author: string, context: string }`
-    : `Generate a culturally resonant, calming piece of wisdom or poetry (2-4 lines) for starting the day in ${lang}.
-       It could be a quote from a South Asian philosopher (like Rumi, Ghalib, Kabir, Iqbal) or contemporary mindfulness.
-       Return as JSON: { text: string, author: string, context: string }`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
+      throw new Error('Invalid AI response');
+    } catch (error: any) {
+      if (retries > 0) {
+        return geminiService._callAI(prompt, retries - 1);
       }
-    });
-
-    try {
-      return JSON.parse(response.text || "{}");
-    } catch (e) {
-      return { text: "Peace is not the absence of trouble, but the presence of stillness.", author: "Unknown" };
+      return { 
+        text: '', 
+        error: error.message || 'AI service error' 
+      };
     }
-  } catch (error) {
-    handleGeminiError(error);
-    return { text: "Peace is not the absence of trouble, but the presence of stillness.", author: "Unknown" };
   }
-}
-
+};
