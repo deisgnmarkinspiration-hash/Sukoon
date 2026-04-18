@@ -29,7 +29,6 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
   const handleSaveMoodDirectly = React.useCallback(async (mood: string) => {
     if (!user) return;
     const moodValue = 
-      mood === 'overwhelmed' ? 'stressed' : 
       mood === 'okay' ? 'neutral' : 
       mood === 'low' ? 'sad' : 
       mood as Mood;
@@ -99,7 +98,7 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 max-w-3xl mx-auto px-4">
-                {(['overwhelmed', 'anxious', 'low', 'okay'] as const).map(m => (
+                {(['stressed', 'anxious', 'low', 'okay'] as const).map(m => (
                   <Card 
                     key={m} 
                     onClick={() => handleStartFlow(m)}
@@ -111,7 +110,7 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
                     {!sukoonIcon(m) && <SparklesBackground />}
                     <div className={cn(
                       "w-14 h-14 sm:w-20 sm:h-20 rounded-[22px] sm:rounded-[32px] flex items-center justify-center transition-all duration-500 shadow-inner z-10",
-                      m === 'overwhelmed' ? "bg-rose-50 text-rose-500" : 
+                      m === 'stressed' ? "bg-rose-50 text-rose-500" : 
                       m === 'anxious' ? "bg-amber-50 text-amber-500" :
                       m === 'low' ? "bg-indigo-50 text-indigo-500" :
                       "bg-emerald-50 text-emerald-500"
@@ -284,7 +283,7 @@ const SparklesBackground = () => (
 
 const sukoonIcon = (mood: string) => {
   switch (mood) {
-    case 'overwhelmed': return <ShieldAlert className="w-8 h-8 sm:w-10 sm:h-10" />;
+    case 'stressed': return <ShieldAlert className="w-8 h-8 sm:w-10 sm:h-10" />;
     case 'anxious': return <Wind className="w-8 h-8 sm:w-10 sm:h-10" />;
     case 'low': return <Smile className="w-8 h-8 sm:w-10 sm:h-10" />;
     case 'okay': return <Sparkles className="w-8 h-8 sm:w-10 sm:h-10" />;

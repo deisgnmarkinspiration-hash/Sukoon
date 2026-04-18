@@ -124,7 +124,7 @@ export const GuidedHomeFlow = ({
           >
             <div className="space-y-4 max-w-md mx-auto">
               <h3 className="text-3xl font-serif font-bold text-gray-900 leading-snug">
-                {selectedMood === 'overwhelmed' ? "Got it. Let's slow things down." : "Take a moment for yourself."}
+                {selectedMood === 'stressed' ? "Got it. Let's slow things down." : "Take a moment for yourself."}
               </h3>
               <p className="text-gray-500 font-medium">You don't have to figure everything out right now.</p>
             </div>
@@ -233,7 +233,7 @@ export const GuidedHomeFlow = ({
 
 const MoodOption = React.memo(({ mood, label, isSelected, onSelect }: { mood: string, label: string, isSelected: boolean, onSelect: (m: string) => void }) => {
   const activeColors: Record<string, string> = {
-    overwhelmed: "bg-rose-50 text-rose-500",
+    stressed: "bg-rose-50 text-rose-500",
     anxious: "bg-amber-50 text-amber-500",
     low: "bg-indigo-50 text-indigo-500",
     okay: "bg-emerald-50 text-emerald-500"
@@ -265,7 +265,7 @@ const MoodOption = React.memo(({ mood, label, isSelected, onSelect }: { mood: st
 
 const MoodIcon = ({ mood, className }: { mood: string, className?: string }) => {
   switch (mood) {
-    case 'overwhelmed': return <AlertCircle className={className} />;
+    case 'stressed': return <AlertCircle className={className} />;
     case 'anxious': return <Wind className={className} />;
     case 'low': return <Heart className={className} />;
     case 'okay': return <Smile className={className} />;
