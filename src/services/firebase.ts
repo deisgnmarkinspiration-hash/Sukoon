@@ -98,6 +98,13 @@ export const dbService = {
         handleFirestoreError(e, 'create', 'moods');
       }
     },
+    update: async (id: string, data: Partial<MoodEntry>) => {
+      try {
+        await updateDoc(doc(db, 'moods', id), data);
+      } catch (e) {
+        handleFirestoreError(e, 'update', `moods/${id}`);
+      }
+    },
     subscribe: (uid: string, callback: (moods: MoodEntry[]) => void) => {
       const q = query(collection(db, 'moods'), where('uid', '==', uid));
       return onSnapshot(q, 

@@ -33,13 +33,13 @@ import { GeminiChat } from './features/chat/GeminiChat';
 
 export default function App() {
   useAppInitialization();
-  const { user, profile, loading, lang, setLang, sukoonMode } = useAppStore();
+  const { user, profile, initializing, sukoonMode, lang } = useAppStore();
   const [view, setView] = useState<'home' | 'journal' | 'calm' | 'futureMe' | 'chat' | 'settings'>('home');
   const t = translations[lang];
 
-  if (loading) {
+  if (initializing) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-pastel-green">
+      <div className="h-[100dvh] w-screen flex flex-col items-center justify-center bg-pastel-green">
         <motion.div 
           animate={{ scale: [1, 1.2, 1], rotate: [0, 180, 360] }}
           transition={{ duration: 3, repeat: Infinity }}
@@ -62,13 +62,13 @@ export default function App() {
 
   return (
     <div className={cn(
-      "min-h-screen transition-colors duration-1000 overflow-x-hidden relative",
-      sukoonMode ? "bg-slate-950 text-slate-200" : "bg-pastel-green text-gray-900"
+      "min-h-[100dvh] transition-colors duration-1000 overflow-x-hidden relative flex flex-col",
+      sukoonMode ? "bg-slate-950 text-slate-100" : "bg-pastel-green text-gray-900"
     )}>
-      {sukoonMode && <div className="fixed inset-0 z-0 atmosphere opacity-30" />}
+      {sukoonMode && <div className="fixed inset-0 z-0 atmosphere opacity-30 pointer-events-none" />}
       
       {/* Navigation Header */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-4 py-2 sm:px-6 sm:py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
            <div className="flex items-center gap-3">
               <div className={cn(
@@ -92,7 +92,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto pt-28 px-6 min-h-screen relative z-10">
+      <main className="max-w-5xl mx-auto pt-20 sm:pt-28 px-4 sm:px-6 flex-1 relative z-10 w-full">
         <AnimatePresence mode="wait">
           <motion.div
             key={view}
@@ -121,7 +121,7 @@ export default function App() {
 const LoginView = () => {
   const [loggingIn, setLoggingIn] = useState(false);
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-pastel-green p-6 overflow-hidden relative">
+    <div className="h-[100dvh] w-screen flex items-center justify-center bg-pastel-green p-6 overflow-hidden relative">
       <BackgroundBlobs />
       <Card className="w-full max-w-sm p-10 border-0 shadow-2xl relative z-10 text-center space-y-10">
         <div className="space-y-4">
@@ -150,23 +150,23 @@ const LoginView = () => {
 };
 
 const JournalView = () => {
-  const { lang, journalEntries } = useAppStore();
+  const { lang, journalEntries, sukoonMode } = useAppStore();
   const t = translations[lang];
   return (
     <div className="space-y-10">
-      <header className="space-y-2">
-        <h2 className="text-4xl font-serif font-bold tracking-tight">{t.journal}</h2>
+      <header className="space-y-2 px-1">
+        <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "text-white" : "text-gray-900")}>{t.journal}</h2>
         <p className="text-gray-500">A timeline of your reflections and deep thoughts.</p>
       </header>
       <div className="grid grid-cols-1 gap-6">
         {journalEntries.map(entry => (
-          <Card key={entry.id} className="p-8 hover:shadow-xl transition-all border-gray-50">
+          <Card key={entry.id} className={cn("p-8 hover:shadow-xl transition-all border-0 shadow-sm", sukoonMode ? "bg-slate-900/50" : "bg-white")}>
             <div className="flex justify-between items-start mb-4">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                 {format(entry.timestamp instanceof Date ? entry.timestamp : (entry.timestamp as any)?.toDate?.() || new Date(), 'PPP')}
               </span>
             </div>
-            <p className="text-xl font-serif leading-relaxed text-gray-800">{entry.content}</p>
+            <p className={cn("text-xl font-serif leading-relaxed", sukoonMode ? "text-slate-200" : "text-gray-800")}>{entry.content}</p>
           </Card>
         ))}
       </div>
@@ -175,22 +175,22 @@ const JournalView = () => {
 };
 
 const FutureMeView = () => {
-  const { lang, futureMeMessages } = useAppStore();
+  const { lang, futureMeMessages, sukoonMode } = useAppStore();
   const t = translations[lang];
   return (
     <div className="space-y-10">
-       <header className="space-y-2">
-        <h2 className="text-4xl font-serif font-bold tracking-tight">Future Me</h2>
+       <header className="space-y-2 px-1">
+        <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "text-white" : "text-gray-900")}>Future Me</h2>
         <p className="text-gray-500 font-medium">Messages sent from your past self to ground you in the future.</p>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {futureMeMessages.map(msg => (
-          <Card key={msg.id} className="p-8 bg-primary-strong text-white border-0 shadow-lg shadow-primary-soft/20 relative overflow-hidden group">
+          <Card key={msg.id} className={cn("p-8 border-0 shadow-lg relative overflow-hidden group transition-all", sukoonMode ? "bg-slate-900 text-slate-100" : "bg-primary-strong text-white")}>
             <Anchor className="absolute top-0 right-0 w-32 h-32 opacity-5 -rotate-12 group-hover:scale-110 transition-transform" />
             <p className="text-lg font-serif italic mb-6">"{msg.prompt || "A message for you..."}"</p>
             <div className="flex items-center justify-between relative z-10">
                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Recorded {format(msg.createdAt instanceof Date ? msg.createdAt : (msg.createdAt as any)?.toDate?.() || new Date(), 'MMM d')}</span>
-               <Button variant="secondary" className="h-10 px-4 bg-white/20 text-white border-0">Play Recording</Button>
+               <Button variant="secondary" className={cn("h-10 px-4 border-0", sukoonMode ? "bg-slate-800 text-slate-100" : "bg-white/20 text-white")}>Play Recording</Button>
             </div>
           </Card>
         ))}
@@ -204,17 +204,18 @@ const SettingsView = () => {
   const t = translations[lang];
   return (
     <div className="space-y-10 max-w-xl mx-auto">
-      <h2 className="text-4xl font-serif font-bold tracking-tight">Settings</h2>
-      <Card className="divide-y divide-gray-50">
+      <h2 className={cn("text-4xl font-serif font-bold tracking-tight", sukoonMode ? "text-white" : "text-gray-900")}>Settings</h2>
+      <Card className={cn("divide-y border-0 shadow-sm transition-all", sukoonMode ? "bg-slate-900/50 divide-slate-800" : "bg-white divide-gray-50")}>
         <div className="p-8 flex items-center justify-between">
            <div className="space-y-1">
-              <p className="font-bold text-lg">Language</p>
+              <p className={cn("font-bold text-lg", sukoonMode ? "text-slate-100" : "text-gray-900")}>Language</p>
               <p className="text-xs text-gray-400">Select your primary communication language.</p>
            </div>
            <select 
               value={lang} 
               onChange={(e) => setLang(e.target.value as any)}
-              className="bg-gray-50 border-0 rounded-xl px-4 py-2 font-bold text-sm outline-none ring-1 ring-gray-100"
+              className={cn("border-0 rounded-xl px-4 py-2 font-bold text-sm outline-none ring-1 transition-all", 
+                sukoonMode ? "bg-slate-800 text-slate-100 ring-slate-700" : "bg-gray-50 ring-gray-100")}
            >
              <option value="en">English</option>
              <option value="hi">Hindi</option>
@@ -223,7 +224,7 @@ const SettingsView = () => {
         </div>
         <div className="p-8 flex items-center justify-between">
            <div className="space-y-1">
-              <p className="font-bold text-lg">Sukoon Mode</p>
+              <p className={cn("font-bold text-lg", sukoonMode ? "text-slate-100" : "text-gray-900")}>Sukoon Mode</p>
               <p className="text-xs text-gray-400">Low-stimulation interface for overwhelmed moments.</p>
            </div>
            <div 
@@ -274,7 +275,7 @@ const OnboardingView = ({ onComplete }: { onComplete: () => void }) => {
   };
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-white p-6">
+    <div className="h-[100dvh] w-screen flex items-center justify-center bg-white p-6">
        <div className="max-w-sm w-full space-y-12 text-center">
           <div className="space-y-4">
              <h2 className="text-4xl font-serif font-bold tracking-tight">{steps[step].title}</h2>

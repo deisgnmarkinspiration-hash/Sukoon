@@ -14,34 +14,26 @@ export const GuidedHomeFlow = ({
   onComplete,
   onSaveMood,
   onJournal,
-  onFutureMe 
+  onFutureMe,
+  onChat,
+  initialMood
 }: { 
   lang: Language, 
   onComplete: () => void,
   onSaveMood: (mood: string) => void,
   onJournal: () => void,
-  onFutureMe: () => void
+  onFutureMe: () => void,
+  onChat: () => void,
+  initialMood?: string | null
 }) => {
-  const [step, setStep] = useState<'entry' | 'calm' | 'reflect' | 'ai'>('entry');
-  const [selectedMood, setSelectedMood] = useState("");
+  const initialStep = initialMood ? (initialMood === 'okay' ? 'ai' : 'calm') : 'entry';
+  const [step, setStep] = useState<'entry' | 'calm' | 'reflect' | 'ai'>(initialStep);
+  const [selectedMood, setSelectedMood] = useState(initialMood || "");
   const [reflection, setReflection] = useState("");
   const [aiResponse, setAIResponse] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
   const [isBreathingIn, setIsBreathingIn] = useState(true);
   const t = translations[lang];
-
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      setIsBreathingIn(prev => !prev);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleMoodSelect = (mood: string) => {
-    setSelectedMood(mood);
-    onSaveMood(mood);
-    setStep('calm');
-  };
 
   const handleReflect = async (val: string) => {
     setReflection(val);
@@ -57,12 +49,55 @@ export const GuidedHomeFlow = ({
     }
   };
 
+  // Logic: Animation triggers on mood change if manual selection is used
+  React.useEffect(() => {
+    if (selectedMood && step === 'entry') {
+      const timer = setTimeout(() => {
+        if (selectedMood === 'okay') {
+           handleReflect("I'm doing okay today. Give me a short, sweet positive message.");
+        } else {
+           setStep('calm');
+        }
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedMood, lang, step]);
+
+  // Handle initial mood if passed from parent
+  React.useEffect(() => {
+    if (initialMood && step === 'entry') {
+      setSelectedMood(initialMood);
+      onSaveMood(initialMood);
+    }
+  }, [initialMood, onSaveMood, step]);
+
+  // Trigger reflection automatically if started instantly in AI mode
+  React.useEffect(() => {
+    if (initialStep === 'ai' && initialMood === 'okay' && !aiResponse && !loadingAI) {
+       handleReflect("I'm doing okay today. Give me a short, sweet positive message.");
+    }
+  }, [initialStep, initialMood]);
+
+  // Requirements: Unique click handler with direct state update (used inside GuidedHomeFlow standalone)
+  const handleMoodSelect = React.useCallback((mood: string) => {
+    setSelectedMood(mood);
+    onSaveMood(mood);
+  }, [onSaveMood]);
+
+  // Breathing animation interval for calm step
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setIsBreathingIn(prev => !prev);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="min-h-[500px] flex items-center justify-center p-6">
       <AnimatePresence mode="wait">
         {step === 'entry' && (
           <motion.div 
-            key="entry" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.1 }}
+            key="entry" exit={{ opacity: 0, y: -20 }}
             className="w-full max-w-2xl text-center space-y-12"
           >
             <h2 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 tracking-tight leading-tight">
@@ -70,22 +105,13 @@ export const GuidedHomeFlow = ({
             </h2>
             <div className="grid grid-cols-2 gap-6">
               {(['overwhelmed', 'anxious', 'low', 'okay'] as const).map(m => (
-                <Card 
+                <MoodOption 
                   key={m} 
-                  onClick={() => handleMoodSelect(m)}
-                  className={cn(
-                    "p-10 cursor-pointer shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all active:scale-95 flex flex-col items-center gap-6 group",
-                    m === 'overwhelmed' ? "bg-primary-strong text-white border-0" : "bg-white border-gray-100"
-                  )}
-                >
-                  <div className={cn(
-                    "w-20 h-20 rounded-[32px] flex items-center justify-center transition-transform group-hover:scale-110 shadow-inner",
-                    m === 'overwhelmed' ? "bg-white/20" : "bg-primary-soft/5 text-primary-soft"
-                  )}>
-                     <MoodIcon mood={m} className="w-10 h-10" />
-                  </div>
-                  <span className="font-bold text-2xl drop-shadow-sm">{t[m]}</span>
-                </Card>
+                  mood={m} 
+                  label={t[m]} 
+                  isSelected={selectedMood === m} 
+                  onSelect={handleMoodSelect} 
+                />
               ))}
             </div>
           </motion.div>
@@ -190,7 +216,7 @@ export const GuidedHomeFlow = ({
                      <Button variant="outline" onClick={onFutureMe} className="h-12 text-xs rounded-xl">
                        <Anchor className="w-4 h-4 mr-2" /> Send to Future Me
                      </Button>
-                     <Button variant="secondary" onClick={() => {}} className="h-12 text-xs rounded-xl">
+                     <Button variant="secondary" onClick={onChat} className="h-12 text-xs rounded-xl">
                        <MessageCircle className="w-4 h-4 mr-2" /> Talk it Out
                      </Button>
                    </div>
@@ -204,6 +230,38 @@ export const GuidedHomeFlow = ({
     </div>
   );
 };
+
+const MoodOption = React.memo(({ mood, label, isSelected, onSelect }: { mood: string, label: string, isSelected: boolean, onSelect: (m: string) => void }) => {
+  const activeColors: Record<string, string> = {
+    overwhelmed: "bg-rose-50 text-rose-500",
+    anxious: "bg-amber-50 text-amber-500",
+    low: "bg-indigo-50 text-indigo-500",
+    okay: "bg-emerald-50 text-emerald-500"
+  };
+
+  return (
+    <Card 
+      onClick={() => onSelect(mood)}
+      className={cn(
+        "p-10 cursor-pointer shadow-sm border-2 transition-all active:scale-95 flex flex-col items-center gap-6 group relative overflow-hidden bg-white",
+        isSelected 
+          ? "border-primary-soft shadow-2xl ring-4 ring-primary-soft/5 z-20 scale-105" 
+          : "border-gray-50 hover:border-gray-100 hover:shadow-lg hover:-translate-y-1 opacity-90 hover:opacity-100"
+      )}
+    >
+      <div className={cn(
+        "w-20 h-20 rounded-[32px] flex items-center justify-center transition-all duration-500 shadow-inner",
+        isSelected ? activeColors[mood] : "bg-gray-50 text-gray-400 group-hover:bg-primary-soft/5 group-hover:text-primary-soft"
+      )}>
+         <MoodIcon mood={mood} className="w-10 h-10" />
+      </div>
+      <span className={cn(
+        "font-bold text-2xl transition-colors",
+        isSelected ? "text-gray-900" : "text-gray-400 group-hover:text-gray-600"
+      )}>{label}</span>
+    </Card>
+  );
+});
 
 const MoodIcon = ({ mood, className }: { mood: string, className?: string }) => {
   switch (mood) {

@@ -126,6 +126,14 @@ const Soundscapes = ({ sukoonMode }: { sukoonMode: boolean }) => {
 const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMode: boolean, lang: any }) => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [likedMessageIds, setLikedMessageIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('sukoon_liked_messages');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const handlePost = async () => {
     if (!input.trim() || loading) return;
@@ -133,6 +141,17 @@ const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMod
     await dbService.wall.post(input.trim(), lang);
     setInput('');
     setLoading(false);
+  };
+
+  const handleLike = (id: string, currentLikes: number) => {
+    if (likedMessageIds.has(id)) return; // Prevent double liking
+    dbService.wall.like(id, currentLikes || 0);
+    setLikedMessageIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(id);
+      localStorage.setItem('sukoon_liked_messages', JSON.stringify(Array.from(newSet)));
+      return newSet;
+    });
   };
 
   return (
@@ -160,44 +179,51 @@ const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMod
       </Card>
 
       <div className="grid grid-cols-1 gap-6">
-        {messages.map((m, i) => (
-          <motion.div
-            key={m.id || i}
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            className={cn(
-              "p-8 rounded-[40px] border shadow-sm transition-all relative overflow-hidden group",
-              sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100 hover:shadow-2xl"
-            )}
-          >
-            <div className="flex items-center gap-4 mb-6">
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", sukoonMode ? "bg-slate-800" : "bg-primary-soft/10")}>
-                <UserIcon className={cn("w-5 h-5", sukoonMode ? "text-slate-500" : "text-primary-soft")} />
-              </div>
-              <div className="flex-1">
-                <p className="font-bold text-gray-900 dark:text-gray-100">Kind Stranger</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-gray-400">
-                    {m.authorLang} • {format(m.createdAt?.toDate?.() || new Date(), 'MMM d')}
-                  </span>
+        {messages.map((m, i) => {
+          const hasLiked = likedMessageIds.has(m.id!);
+          return (
+            <motion.div
+              key={m.id || i}
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className={cn(
+                "p-8 rounded-[40px] border shadow-sm transition-all relative overflow-hidden group",
+                sukoonMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100 hover:shadow-2xl"
+              )}
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", sukoonMode ? "bg-slate-800" : "bg-primary-soft/10")}>
+                  <UserIcon className={cn("w-5 h-5", sukoonMode ? "text-slate-500" : "text-primary-soft")} />
+                </div>
+                <div className="flex-1">
+                  <p className={cn("font-bold", sukoonMode ? "text-slate-100" : "text-gray-900")}>Kind Stranger</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-gray-400">
+                      {m.authorLang} • {format(m.createdAt?.toDate?.() || new Date(), 'MMM d')}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <p className="text-xl font-serif italic text-gray-700 dark:text-gray-300 leading-relaxed pl-2 mb-8 border-l-2 border-primary-soft/20 py-1">
-              "{m.text}"
-            </p>
-            <div className="flex justify-start">
-               <button 
-                onClick={() => dbService.wall.like(m.id!, m.likes || 0)}
-                className="flex items-center gap-2 group/btn font-bold text-sm text-gray-400 hover:text-red-500 transition-colors bg-gray-50 dark:bg-slate-800 px-4 py-2 rounded-full"
-               >
-                 <Heart className={cn("w-4 h-4 transition-transform group-active/btn:scale-125", m.likes > 0 && "text-red-500 fill-current")} />
-                 {m.likes || 0}
-               </button>
-            </div>
-          </motion.div>
-        ))}
+              <p className="text-xl font-serif italic text-gray-700 dark:text-gray-300 leading-relaxed pl-2 mb-8 border-l-2 border-primary-soft/20 py-1">
+                "{m.text}"
+              </p>
+              <div className="flex justify-start">
+                 <button 
+                  onClick={() => handleLike(m.id!, m.likes || 0)}
+                  disabled={hasLiked}
+                  className={cn(
+                    "flex items-center gap-2 group/btn font-bold text-sm text-gray-400 transition-colors px-4 py-2 rounded-full",
+                    hasLiked ? "bg-red-50/50 dark:bg-red-900/10 cursor-default" : "hover:text-red-500 bg-gray-50 dark:bg-slate-800 cursor-pointer"
+                  )}
+                 >
+                   <Heart className={cn("w-4 h-4 transition-transform", hasLiked ? "text-red-500 fill-current" : "group-active/btn:scale-125", (m.likes > 0 && !hasLiked) && "text-red-400")} />
+                   <span className={cn(hasLiked && "text-red-500")}>{m.likes || 0}</span>
+                 </button>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );
@@ -245,7 +271,7 @@ const DistractTasks = ({ sukoonMode }: { sukoonMode: boolean }) => {
         ) : task === 'rhythm' ? (
           <motion.div key="rhythm" className="text-center space-y-12">
             <div className="space-y-4">
-              <h3 className="text-3xl font-serif font-bold tracking-tight">Focus on the rhythm</h3>
+              <h3 className={cn("text-3xl font-serif font-bold tracking-tight", sukoonMode ? "text-white" : "text-gray-900")}>Focus on the rhythm</h3>
               <p className="text-gray-400">Tap the circle at a steady pace to fill the progress.</p>
             </div>
             <button 
@@ -265,8 +291,8 @@ const DistractTasks = ({ sukoonMode }: { sukoonMode: boolean }) => {
           </motion.div>
         ) : (
           <motion.div key="facts" className="text-center space-y-12">
-            <Card className={cn("p-12 max-w-sm mx-auto shadow-2xl", sukoonMode ? "bg-slate-900 border-slate-800" : "border-0")}>
-              <p className="text-2xl font-serif italic text-gray-800 dark:text-gray-100 leading-relaxed leading-relaxed">"{facts[factIndex]}"</p>
+            <Card className={cn("p-12 max-w-sm mx-auto shadow-2xl transition-all", sukoonMode ? "bg-slate-900 border-slate-800" : "border-0")}>
+              <p className={cn("text-2xl font-serif italic leading-relaxed", sukoonMode ? "text-slate-100" : "text-gray-800")}>"{facts[factIndex]}"</p>
             </Card>
             <div className="space-y-4">
               <Button onClick={() => setFactIndex(i => (i + 1) % facts.length)} className="rounded-full px-8">Read Another</Button>
@@ -293,13 +319,13 @@ export const CalmSanctuary = () => {
   };
 
   return (
-    <div className={cn("relative z-10 space-y-12 animate-in fade-in duration-700", sukoonMode && "dark")}>
+    <div className={cn("relative z-10 space-y-12", sukoonMode && "dark")}>
       <EnhancedBackground sukoonMode={sukoonMode} theme={theme} />
       
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 pb-4 border-b border-gray-100/20">
         <div className="space-y-2 text-center md:text-left">
-          <h2 className="text-5xl font-serif font-bold tracking-tight text-gray-900 drop-shadow-sm">
+          <h2 className={cn("text-5xl font-serif font-bold tracking-tight drop-shadow-sm transition-colors duration-1000", sukoonMode ? "text-white" : "text-gray-900")}>
             {sukoonMode ? "Sukoon" : "Sanctuary"}
           </h2>
           <p className="text-gray-500 font-medium">

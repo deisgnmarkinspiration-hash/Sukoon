@@ -3,10 +3,12 @@ import { Language } from '@/src/types';
 import { AppState } from './index';
 
 export interface UISlice {
+  initializing: boolean;
   loading: boolean;
   error: string | null;
   lang: Language;
   sukoonMode: boolean;
+  setInitializing: (initializing: boolean) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setLang: (lang: Language) => void;
@@ -14,10 +16,12 @@ export interface UISlice {
 }
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
-  loading: true,
+  initializing: true,
+  loading: false,
   error: null,
   lang: 'en',
   sukoonMode: false,
+  setInitializing: (initializing) => set({ initializing }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   setLang: (lang) => set({ lang }),

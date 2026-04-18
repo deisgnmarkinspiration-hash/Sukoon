@@ -11,7 +11,7 @@ export function useAppInitialization() {
   const { 
     setUser, 
     setProfile, 
-    setLoading, 
+    setInitializing, 
     setMoods, 
     setJournalEntries, 
     setWallMessages, 
@@ -49,7 +49,7 @@ export function useAppInitialization() {
         setJournalEntries([]);
         setFutureMeMessages([]);
       }
-      setLoading(false);
+      setInitializing(false);
     });
 
     // Global subscriptions
