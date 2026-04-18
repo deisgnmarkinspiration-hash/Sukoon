@@ -1,0 +1,23 @@
+{
+  "name": "Sukoon",
+  "short_name": "Sukoon",
+  "description": "Your sanctuary for mental clarity and emotional peace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F1F9F6",
+  "theme_color": "#4A8C73",
+  "icons": [
+    {
+      "src": "/icon-128.svg",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

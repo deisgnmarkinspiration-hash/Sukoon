@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Soft, squircle-like background -->
+  <rect width="512" height="512" rx="160" fill="#4A8C73" />
+  
+  <!-- Cloud shape (Solid White) -->
+  <path d="M371.3 226c-3.4-56.1-50-100-107.1-100-44.5 0-83 27-100.8 66.2C121 199.1 88 238.1 88 284c0 53 43 96 96 96h180c48.6 0 88-39.4 88-88 0-46.6-36.2-84.8-80.7-88z" fill="#FFFFFF" />
+
+  <!-- Rain shape (Cut out / Green) to match logo -->
+  <path d="M192 340v60" stroke="#4A8C73" stroke-width="24" stroke-linecap="round" />
+  <path d="M256 360v60" stroke="#4A8C73" stroke-width="24" stroke-linecap="round" />
+  <path d="M320 340v60" stroke="#4A8C73" stroke-width="24" stroke-linecap="round" />
+</svg>
