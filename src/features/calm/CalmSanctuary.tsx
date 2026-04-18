@@ -5,7 +5,7 @@ import { cn } from '@/src/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { useAppStore } from '@/src/store/useAppStore';
-import { services } from '@/src/services/firebase';
+import { dbService } from '@/src/services/firebase';
 import { translations } from '@/src/translations';
 import { format } from 'date-fns';
 
@@ -130,7 +130,7 @@ const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMod
   const handlePost = async () => {
     if (!input.trim() || loading) return;
     setLoading(true);
-    await services.wall.post(input.trim(), lang);
+    await dbService.wall.post(input.trim(), lang);
     setInput('');
     setLoading(false);
   };
@@ -189,7 +189,7 @@ const WallOfHope = ({ messages, sukoonMode, lang }: { messages: any[], sukoonMod
             </p>
             <div className="flex justify-start">
                <button 
-                onClick={() => services.wall.like(m.id!, m.likes || 0)}
+                onClick={() => dbService.wall.like(m.id!, m.likes || 0)}
                 className="flex items-center gap-2 group/btn font-bold text-sm text-gray-400 hover:text-red-500 transition-colors bg-gray-50 dark:bg-slate-800 px-4 py-2 rounded-full"
                >
                  <Heart className={cn("w-4 h-4 transition-transform group-active/btn:scale-125", m.likes > 0 && "text-red-500 fill-current")} />

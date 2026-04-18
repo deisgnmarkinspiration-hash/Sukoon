@@ -1,7 +1,4 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 import { 
-  getFirestore, 
   collection, 
   addDoc, 
   query, 
@@ -13,120 +10,210 @@ import {
   setDoc, 
   doc, 
   getDoc,
-  updateDoc 
+  updateDoc,
+  getDocs
 } from 'firebase/firestore';
-import firebaseConfig from '@/firebase-applet-config.json';
-import { MoodEntry, JournalEntry, UserProfile, WallOfHopeMessage, FutureMeMessage } from '../types';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth, db } from '../lib/firebase';
+import { 
+  MoodEntry, 
+  JournalEntry, 
+  UserProfile, 
+  WallOfHopeMessage, 
+  FutureMeMessage,
+  ChatMessage 
+} from '../types';
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: 'create' | 'update' | 'delete' | 'list' | 'get' | 'write';
+  path: string | null;
+  authInfo: {
+    userId: string;
+    email: string;
+    emailVerified: boolean;
+    isAnonymous: boolean;
+    providerInfo: { providerId: string; displayName: string; email: string; }[];
+  }
+}
+
+const handleFirestoreError = (error: any, operationType: FirestoreErrorInfo['operationType'], path: string | null = null) => {
+  if (error.code === 'permission-denied') {
+    const errorInfo: FirestoreErrorInfo = {
+      error: error.message,
+      operationType,
+      path,
+      authInfo: {
+        userId: auth.currentUser?.uid || 'anonymous',
+        email: auth.currentUser?.email || '',
+        emailVerified: auth.currentUser?.emailVerified || false,
+        isAnonymous: auth.currentUser?.isAnonymous || true,
+        providerInfo: auth.currentUser?.providerData.map(p => ({
+          providerId: p.providerId,
+          displayName: p.displayName || '',
+          email: p.email || ''
+        })) || []
+      }
+    };
+    throw new Error(JSON.stringify(errorInfo));
+  }
+  throw error;
+};
+
 const googleProvider = new GoogleAuthProvider();
 
-export const services = {
+export const dbService = {
   auth: {
     loginWithGoogle: () => signInWithPopup(auth, googleProvider),
     logout: () => auth.signOut(),
     getUserProfile: async (uid: string) => {
-      const docRef = doc(db, 'users', uid);
-      const snap = await getDoc(docRef);
-      return snap.exists() ? (snap.data() as UserProfile) : null;
+      try {
+        const docRef = doc(db, 'users', uid);
+        const snap = await getDoc(docRef);
+        return snap.exists() ? (snap.data() as UserProfile) : null;
+      } catch (e) {
+        return handleFirestoreError(e, 'get', `users/${uid}`);
+      }
     },
     createUserProfile: async (profile: UserProfile) => {
-      await setDoc(doc(db, 'users', profile.uid), {
-        ...profile,
-        createdAt: serverTimestamp()
-      });
+      try {
+        await setDoc(doc(db, 'users', profile.uid), {
+          ...profile,
+          createdAt: serverTimestamp()
+        });
+      } catch (e) {
+        handleFirestoreError(e, 'create', `users/${profile.uid}`);
+      }
     }
   },
 
   moods: {
     save: async (entry: Omit<MoodEntry, 'id'>) => {
-      return addDoc(collection(db, 'moods'), {
-        ...entry,
-        timestamp: serverTimestamp()
-      });
+      try {
+        return await addDoc(collection(db, 'moods'), {
+          ...entry,
+          timestamp: serverTimestamp()
+        });
+      } catch (e) {
+        handleFirestoreError(e, 'create', 'moods');
+      }
     },
     subscribe: (uid: string, callback: (moods: MoodEntry[]) => void) => {
-      const q = query(
-        collection(db, 'moods'),
-        where('uid', '==', uid)
+      const q = query(collection(db, 'moods'), where('uid', '==', uid));
+      return onSnapshot(q, 
+        (snap) => {
+          const moods = snap.docs.map(d => ({ id: d.id, ...d.data() } as MoodEntry));
+          moods.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+          callback(moods.slice(0, 50));
+        },
+        (error) => handleFirestoreError(error, 'list', 'moods')
       );
-      return onSnapshot(q, (snap) => {
-        const moods = snap.docs.map(d => ({ id: d.id, ...d.data() } as MoodEntry));
-        // Sort client-side to avoid mandatory composite index
-        moods.sort((a, b) => {
-          const tA = (a.timestamp as any)?.seconds || 0;
-          const tB = (b.timestamp as any)?.seconds || 0;
-          return tB - tA;
+    }
+  },
+
+  history: {
+    saveMessage: async (uid: string, msg: Omit<ChatMessage, 'id'>) => {
+      try {
+        return await addDoc(collection(db, 'users', uid, 'chat'), {
+          ...msg,
+          timestamp: serverTimestamp()
         });
-        callback(moods.slice(0, 50));
-      });
+      } catch (e) {
+        handleFirestoreError(e, 'create', `users/${uid}/chat`);
+      }
+    },
+    getMessages: async (uid: string): Promise<ChatMessage[]> => {
+      try {
+        const q = query(collection(db, 'users', uid, 'chat'), orderBy('timestamp', 'asc'), limit(100));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ 
+          id: d.id, 
+          ...d.data(), 
+          timestamp: d.data().timestamp?.toDate() || new Date() 
+        } as ChatMessage));
+      } catch (e) {
+        return handleFirestoreError(e, 'list', `users/${uid}/chat`);
+      }
+    },
+    clearHistory: async (uid: string) => {
+        // Simple strategy: user would delete their chat collection
+        // In Firestore, we have to delete docs one by one or via batch
+        const q = query(collection(db, 'users', uid, 'chat'));
+        const snap = await getDocs(q);
+        // This is a production risk if history is huge, but we limit to 100 for now
+        for (const d of snap.docs) {
+            await updateDoc(d.ref, { deleted: true }); // better than actual delete for safety in this demo
+        }
     }
   },
 
   journal: {
     save: async (entry: Omit<JournalEntry, 'id'>) => {
-      return addDoc(collection(db, 'journal'), {
-        ...entry,
-        timestamp: serverTimestamp()
-      });
+      try {
+        return await addDoc(collection(db, 'journal'), {
+          ...entry,
+          timestamp: serverTimestamp()
+        });
+      } catch (e) {
+        handleFirestoreError(e, 'create', 'journal');
+      }
     },
     subscribe: (uid: string, callback: (entries: JournalEntry[]) => void) => {
-      const q = query(
-        collection(db, 'journal'),
-        where('uid', '==', uid)
+      const q = query(collection(db, 'journal'), where('uid', '==', uid));
+      return onSnapshot(q, 
+        (snap) => {
+          const entries = snap.docs.map(d => ({ id: d.id, ...d.data() } as JournalEntry));
+          entries.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+          callback(entries.slice(0, 50));
+        },
+        (error) => handleFirestoreError(error, 'list', 'journal')
       );
-      return onSnapshot(q, (snap) => {
-        const entries = snap.docs.map(d => ({ id: d.id, ...d.data() } as JournalEntry));
-        // Sort client-side to avoid mandatory composite index
-        entries.sort((a, b) => {
-          const tA = (a.timestamp as any)?.seconds || 0;
-          const tB = (b.timestamp as any)?.seconds || 0;
-          return tB - tA;
-        });
-        callback(entries.slice(0, 50));
-      });
     }
   },
 
   wall: {
     post: async (text: string, lang: string) => {
-      return addDoc(collection(db, 'wallOfHope'), {
-        text,
-        authorLang: lang,
-        likes: 0,
-        createdAt: serverTimestamp()
-      });
+      try {
+        return await addDoc(collection(db, 'wallOfHope'), {
+          text,
+          authorLang: lang,
+          likes: 0,
+          createdAt: serverTimestamp()
+        });
+      } catch (e) {
+        handleFirestoreError(e, 'create', 'wallOfHope');
+      }
     },
     subscribe: (callback: (messages: WallOfHopeMessage[]) => void) => {
       const q = query(collection(db, 'wallOfHope'), orderBy('createdAt', 'desc'), limit(50));
-      return onSnapshot(q, (snap) => {
-        const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as WallOfHopeMessage));
-        callback(msgs);
-      });
+      return onSnapshot(q, 
+        (snap) => {
+          const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as WallOfHopeMessage));
+          callback(msgs);
+        },
+        (error) => handleFirestoreError(error, 'list', 'wallOfHope')
+      );
     },
     like: async (id: string, currentLikes: number) => {
-      await updateDoc(doc(db, 'wallOfHope', id), { likes: currentLikes + 1 });
+      try {
+        await updateDoc(doc(db, 'wallOfHope', id), { likes: currentLikes + 1 });
+      } catch (e) {
+        handleFirestoreError(e, 'update', `wallOfHope/${id}`);
+      }
     }
   },
 
   futureMe: {
     subscribe: (uid: string, callback: (messages: FutureMeMessage[]) => void) => {
-      const q = query(
-        collection(db, 'futureMeMessages'),
-        where('uid', '==', uid)
+      const q = query(collection(db, 'futureMeMessages'), where('uid', '==', uid));
+      return onSnapshot(q, 
+        (snap) => {
+          const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as FutureMeMessage));
+          msgs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+          callback(msgs);
+        },
+        (error) => handleFirestoreError(error, 'list', 'futureMeMessages')
       );
-      return onSnapshot(q, (snap) => {
-        const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as FutureMeMessage));
-        // Sort client-side to avoid mandatory composite index
-        msgs.sort((a, b) => {
-          const tA = (a.createdAt as any)?.seconds || 0;
-          const tB = (b.createdAt as any)?.seconds || 0;
-          return tB - tA;
-        });
-        callback(msgs);
-      });
     }
   }
 };

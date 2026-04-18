@@ -16,7 +16,7 @@ import {
 import { format } from 'date-fns';
 import { useAppStore } from './store/useAppStore';
 import { useAppInitialization } from './hooks/useAppInitialization';
-import { services } from './services/firebase';
+import { dbService } from './services/firebase';
 import { translations } from './translations';
 import { cn } from './lib/utils';
 
@@ -62,29 +62,37 @@ export default function App() {
 
   return (
     <div className={cn(
-      "min-h-screen transition-colors duration-1000 overflow-x-hidden",
+      "min-h-screen transition-colors duration-1000 overflow-x-hidden relative",
       sukoonMode ? "bg-slate-950 text-slate-200" : "bg-pastel-green text-gray-900"
     )}>
+      {sukoonMode && <div className="fixed inset-0 z-0 atmosphere opacity-30" />}
+      
       {/* Navigation Header */}
       <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary-strong rounded-2xl flex items-center justify-center shadow-lg transform -rotate-12">
+              <div className={cn(
+                "w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transform -rotate-12 transition-colors",
+                sukoonMode ? "bg-primary-strong/30 border border-primary-strong/20" : "bg-primary-strong"
+              )}>
                  <CloudRain className="w-6 h-6 text-white" />
               </div>
               <span className="text-xl font-serif font-bold tracking-tight">Sukoon</span>
            </div>
            
-           <div className="flex items-center bg-white/40 backdrop-blur-xl border border-white/50 p-1.5 rounded-2xl shadow-sm">
-              <NavButton icon={<HomeIcon />} active={view === 'home'} onClick={() => setView('home')} />
-              <NavButton icon={<BookOpen />} active={view === 'journal'} onClick={() => setView('journal')} />
-              <NavButton icon={<MessageSquare />} active={view === 'chat'} onClick={() => setView('chat')} />
-              <NavButton icon={<SettingsIcon />} active={view === 'settings'} onClick={() => setView('settings')} />
+           <div className={cn(
+              "flex items-center backdrop-blur-xl border p-1.5 rounded-2xl shadow-sm transition-all",
+              sukoonMode ? "bg-slate-900/60 border-slate-800" : "bg-white/40 border-white/50"
+           )}>
+              <NavButton icon={<HomeIcon />} active={view === 'home'} onClick={() => setView('home')} sukoon={sukoonMode} />
+              <NavButton icon={<BookOpen />} active={view === 'journal'} onClick={() => setView('journal')} sukoon={sukoonMode} />
+              <NavButton icon={<MessageSquare />} active={view === 'chat'} onClick={() => setView('chat')} sukoon={sukoonMode} />
+              <NavButton icon={<SettingsIcon />} active={view === 'settings'} onClick={() => setView('settings')} sukoon={sukoonMode} />
            </div>
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto pt-28 px-6 min-h-screen">
+      <main className="max-w-5xl mx-auto pt-28 px-6 min-h-screen relative z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={view}
@@ -127,7 +135,7 @@ const LoginView = () => {
         <Button 
           onClick={async () => {
             setLoggingIn(true);
-            try { await services.auth.loginWithGoogle(); } catch(e) {}
+            try { await dbService.auth.loginWithGoogle(); } catch(e) {}
             setLoggingIn(false);
           }}
           disabled={loggingIn}
@@ -232,7 +240,7 @@ const SettingsView = () => {
            </div>
         </div>
         <div className="p-8">
-           <Button variant="danger" onClick={() => services.auth.logout()} className="w-full">
+           <Button variant="danger" onClick={() => dbService.auth.logout()} className="w-full">
              <LogOut className="w-4 h-4 mr-2" /> {t.logout}
            </Button>
         </div>
@@ -254,7 +262,7 @@ const OnboardingView = ({ onComplete }: { onComplete: () => void }) => {
 
   const handleFinish = async () => {
     if (!user) return;
-    await services.auth.createUserProfile({
+    await dbService.auth.createUserProfile({
       uid: user.uid,
       email: user.email!,
       displayName: profile.displayName,
@@ -317,12 +325,14 @@ const OnboardingView = ({ onComplete }: { onComplete: () => void }) => {
 
 // --- Helpers ---
 
-const NavButton = ({ icon, active, onClick }: { icon: any, active: boolean, onClick: () => void }) => (
+const NavButton = ({ icon, active, onClick, sukoon }: { icon: any, active: boolean, onClick: () => void, sukoon?: boolean }) => (
   <button 
     onClick={onClick}
     className={cn(
       "w-12 h-12 flex items-center justify-center rounded-xl transition-all",
-      active ? "bg-primary-strong text-white shadow-lg" : "text-gray-400 hover:text-primary-soft"
+      active 
+        ? (sukoon ? "bg-primary-strong/40 text-white shadow-lg border border-primary-strong/30" : "bg-primary-strong text-white shadow-lg") 
+        : (sukoon ? "text-slate-500 hover:text-primary-soft" : "text-gray-400 hover:text-primary-soft")
     )}
   >
     {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" }) : icon}

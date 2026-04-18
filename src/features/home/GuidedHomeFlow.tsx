@@ -4,7 +4,8 @@ import { Wind, Heart, Sparkles, Send, BookOpen, Anchor, MessageCircle, ArrowRigh
 import { cn } from '@/src/lib/utils';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
-import { geminiService } from '@/src/services/gemini';
+import { aiService } from '@/src/services/gemini';
+import { dbService } from '@/src/services/firebase';
 import { translations } from '@/src/translations';
 import { Language } from '@/src/types';
 
@@ -26,7 +27,15 @@ export const GuidedHomeFlow = ({
   const [reflection, setReflection] = useState("");
   const [aiResponse, setAIResponse] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
+  const [isBreathingIn, setIsBreathingIn] = useState(true);
   const t = translations[lang];
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setIsBreathingIn(prev => !prev);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleMoodSelect = (mood: string) => {
     setSelectedMood(mood);
@@ -38,9 +47,14 @@ export const GuidedHomeFlow = ({
     setReflection(val);
     setStep('ai');
     setLoadingAI(true);
-    const resp = await geminiService.getReassurance(selectedMood, val, lang);
-    setAIResponse(resp.text || resp.error || "");
-    setLoadingAI(false);
+    try {
+      const resp = await aiService.getReassurance(selectedMood, val, lang);
+      setAIResponse(resp.text || resp.error || "I'm here for you.");
+    } catch (err) {
+      setAIResponse("Take a deep breath. I'm here.");
+    } finally {
+      setLoadingAI(false);
+    }
   };
 
   return (
@@ -92,24 +106,27 @@ export const GuidedHomeFlow = ({
             <div className="relative flex items-center justify-center">
               <motion.div 
                 animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.05, 0.3] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
                 className="absolute w-64 h-64 bg-primary-soft rounded-full blur-3xl opacity-20"
               />
               <motion.div 
                 animate={{ scale: [1, 1.15, 1] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
                 className="w-48 h-48 bg-white border-4 border-primary-soft/10 rounded-full flex flex-col items-center justify-center text-primary-soft shadow-xl z-10"
               >
                 <div className="flex flex-col items-center">
                   <Wind className="w-10 h-10 mb-2 animate-pulse" />
-                  <motion.span 
-                    key={lang}
-                    animate={{ opacity: [1, 0.4, 1] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                    className="text-[10px] font-bold uppercase tracking-[0.2em]"
-                  >
-                    {t.breathePrompt}
-                  </motion.span>
+                  <AnimatePresence mode="wait">
+                    <motion.span 
+                      key={isBreathingIn ? 'in' : 'out'}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5 }}
+                      className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                    >
+                      {isBreathingIn ? "Breathe In" : "Breathe Out"}
+                    </motion.span>
+                  </AnimatePresence>
                 </div>
               </motion.div>
             </div>

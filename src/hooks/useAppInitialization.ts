@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useAppStore } from '../store/useAppStore';
-import { services, auth } from '../services/firebase';
+import { auth } from '../lib/firebase';
+import { dbService } from '../services/firebase';
 
 /**
  * Hook to handle initial app synchronization with Firebase.
@@ -18,24 +19,30 @@ export function useAppInitialization() {
   } = useAppStore();
 
   useEffect(() => {
+    let subUnsubs: (() => void)[] = [];
+
+    const cleanupSubs = () => {
+      subUnsubs.forEach(unsub => unsub());
+      subUnsubs = [];
+    };
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      cleanupSubs();
       
       if (user) {
-        // Fetch/Sync profile
-        const profile = await services.auth.getUserProfile(user.uid);
-        setProfile(profile);
+        try {
+          // Fetch/Sync profile
+          const profile = await dbService.auth.getUserProfile(user.uid);
+          setProfile(profile);
 
-        // Subscriptions
-        const unsubMoods = services.moods.subscribe(user.uid, setMoods);
-        const unsubJournal = services.journal.subscribe(user.uid, setJournalEntries);
-        const unsubFutureMe = services.futureMe.subscribe(user.uid, setFutureMeMessages);
-        
-        return () => {
-          unsubMoods();
-          unsubJournal();
-          unsubFutureMe();
-        };
+          // Subscriptions
+          subUnsubs.push(dbService.moods.subscribe(user.uid, setMoods));
+          subUnsubs.push(dbService.journal.subscribe(user.uid, setJournalEntries));
+          subUnsubs.push(dbService.futureMe.subscribe(user.uid, setFutureMeMessages));
+        } catch (e) {
+          console.error('Initialization Error:', e);
+        }
       } else {
         setProfile(null);
         setMoods([]);
@@ -46,11 +53,12 @@ export function useAppInitialization() {
     });
 
     // Global subscriptions
-    const unsubWall = services.wall.subscribe(setWallMessages);
+    const unsubWall = dbService.wall.subscribe(setWallMessages);
 
     return () => {
       unsubscribeAuth();
       unsubWall();
+      cleanupSubs();
     };
   }, []);
 }

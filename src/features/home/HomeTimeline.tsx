@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { Smile, BookOpen, Calendar, ShieldAlert, Wind, Anchor, Settings, Play } from 'lucide-react';
@@ -6,20 +6,20 @@ import { cn } from '@/src/lib/utils';
 import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { useAppStore } from '@/src/store/useAppStore';
-import { services } from '@/src/services/firebase';
+import { dbService } from '@/src/services/firebase';
 import { translations } from '@/src/translations';
 import { GuidedHomeFlow } from './GuidedHomeFlow';
 import { MoodEntry, JournalEntry, FutureMeMessage, Mood } from '@/src/types';
 
 export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (v: any) => void }) => {
-  const { lang, moods, journalEntries, futureMeMessages, user, profile } = useAppStore();
+  const { lang, moods, journalEntries, sukoonMode, user, profile } = useAppStore();
   const [flowActive, setFlowActive] = useState(false);
   const t = translations[lang];
 
   const handleSaveMoodDirectly = async (mood: string) => {
     if (!user) return;
     const moodValue = mood === 'overwhelmed' ? 'stressed' : mood === 'okay' ? 'neutral' : mood as Mood;
-    await services.moods.save({
+    await dbService.moods.save({
       uid: user.uid,
       mood: moodValue,
       intensity: 5,
@@ -27,14 +27,16 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
     });
   };
 
-  const timeline = [
-    ...moods.map(m => ({ ...m, type: 'mood' as const })),
-    ...journalEntries.map(j => ({ ...j, type: 'journal' as const }))
-  ].sort((a, b) => {
-    const tA = (a.timestamp instanceof Date ? a.timestamp : (a.timestamp as any)?.toDate?.()) || new Date(0);
-    const tB = (b.timestamp instanceof Date ? b.timestamp : (b.timestamp as any)?.toDate?.()) || new Date(0);
-    return tB.getTime() - tA.getTime();
-  });
+  const timeline = useMemo(() => {
+    return [
+      ...moods.map(m => ({ ...m, type: 'mood' as const })),
+      ...journalEntries.map(j => ({ ...j, type: 'journal' as const }))
+    ].sort((a, b) => {
+      const tA = (a.timestamp instanceof Date ? a.timestamp : (a.timestamp as any)?.toDate?.()) || new Date(0);
+      const tB = (b.timestamp instanceof Date ? b.timestamp : (b.timestamp as any)?.toDate?.()) || new Date(0);
+      return tB.getTime() - tA.getTime();
+    });
+  }, [moods, journalEntries]);
 
   return (
     <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
@@ -47,8 +49,16 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
             {/* Step 1: Entry */}
             <div className="text-center space-y-12 pt-8">
               <div className="space-y-4">
-                <h2 className="text-sm font-bold text-primary-soft uppercase tracking-widest">Salaam, {profile?.displayName?.split(' ')[0]}</h2>
-                <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 tracking-tight leading-tight">
+                <h2 className={cn(
+                  "text-sm font-bold uppercase tracking-widest",
+                  sukoonMode ? "text-primary-strong/60" : "text-primary-soft"
+                )}>
+                  Salaam, {profile?.displayName?.split(' ')[0]}
+                </h2>
+                <h1 className={cn(
+                  "text-5xl md:text-6xl font-serif font-bold tracking-tight leading-tight transition-colors duration-1000",
+                  sukoonMode ? "text-slate-100" : "text-gray-900"
+                )}>
                   {t.feelingQuestion}
                 </h1>
               </div>
@@ -60,7 +70,9 @@ export const HomeTimeline = ({ onSOS, setView }: { onSOS: () => void, setView: (
                     onClick={() => setFlowActive(true)}
                     className={cn(
                       "p-12 cursor-pointer transition-all active:scale-95 flex flex-col items-center gap-6 group hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden",
-                      m === 'overwhelmed' ? "bg-primary-strong text-white border-0 shadow-xl shadow-primary-soft/20" : "bg-white border-gray-100"
+                      m === 'overwhelmed' 
+                        ? (sukoonMode ? "bg-slate-900 text-slate-100 border-slate-800" : "bg-primary-strong text-white border-0 shadow-xl shadow-primary-soft/20") 
+                        : (sukoonMode ? "bg-slate-900 border-slate-800 text-slate-300" : "bg-white border-gray-100")
                     )}
                   >
                     {!sukoonIcon(m) && <SparklesBackground />}

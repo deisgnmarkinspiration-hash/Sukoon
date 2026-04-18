@@ -1,106 +1,129 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Language } from '@/src/types';
+import { GoogleGenAI } from "@google/genai";
+import { Language, ChatMessage } from '@/src/types';
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
 if (!API_KEY) {
-  console.error('GEMINI_API_KEY is not defined in environment variables');
+  throw new Error('GEMINI_API_KEY is missing. AI features will not work.');
 }
 
-const genAI = new GoogleGenerativeAI(API_KEY || '');
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-export interface AIServiceResponse {
+export interface GeminiResponse {
   text: string;
   error?: string;
 }
 
-/**
- * Production-grade Gemini service with retries and validation.
- */
-export const geminiService = {
-  /**
-   * Generates a reassurance message based on mood and reflection.
-   */
-  getReassurance: async (
-    mood: string, 
-    reflection: string, 
-    lang: Language, 
-    retries = 1
-  ): Promise<AIServiceResponse> => {
-    const prompt = `
-      Context: Mental health support app (South Asia focus, casual, warm)
-      User feels: ${mood}
-      What's happening: ${reflection}
-      Respond in ${lang === 'en' ? 'English' : lang === 'hi' ? 'Hindi' : 'Urdu'}.
-      Rules:
-      - 2-3 short sentences
-      - calm, human tone
-      - no clinical language
-      - validate feeling
-      - provide one tiny, actionable suggestion (e.g., wash face, drink water, write one thing)
-    `;
+const SYSTEM_INSTRUCTION = `
+You are Sukoon AI, a compassionate and empathetic mental health companion. 
+Your goal is to provide a safe space for people to express their feelings.
+You understand English, Hindi, and Urdu.
+Rules:
+- Be brief (2-4 sentences max unless asked for more).
+- Use a deeply supportive, non-judgmental tone.
+- Reflect back the user's emotion (validation).
+- Never give medical advice, but offer gentle action items (breathing, grounding).
+- If the user is in serious crisis, encourage them to seek professional help immediately.
+- For non-mental health questions, gently pivot back to their emotional state.
+`;
 
-    return geminiService._callAI(prompt, retries);
-  },
+export class GeminiService {
+  private abortController: AbortController | null = null;
 
-  /**
-   * General chat handler for the "Talk it out" feature.
-   */
-  chat: async (
-    history: { role: 'user' | 'model'; parts: { text: string }[] }[],
-    message: string,
-    lang: Language,
-    retries = 1
-  ): Promise<AIServiceResponse> => {
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-    const chat = model.startChat({
-      history,
-      generationConfig: {
-        maxOutputTokens: 500,
-      },
-    });
-
-    try {
-      const result = await chat.sendMessage(message);
-      const response = await result.response;
-      return { text: response.text() };
-    } catch (error: any) {
-      if (retries > 0) {
-        console.warn('AI Chat failed, retrying...', error);
-        return geminiService.chat(history, message, lang, retries - 1);
-      }
-      return { 
-        text: '', 
-        error: error.message || 'Failed to connect to AI service. Please try again.' 
-      };
-    }
-  },
-
-  /**
-   * Internal helper for AI calls with retry logic.
-   */
-  _callAI: async (prompt: string, retries: number): Promise<AIServiceResponse> => {
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-
-    try {
-      const result = await Promise.race([
-        model.generateContent(prompt),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('AI Request timeout')), 10000))
-      ]);
-
-      if ('response' in result) {
-        const response = await result.response;
-        return { text: response.text() };
-      }
-      throw new Error('Invalid AI response');
-    } catch (error: any) {
-      if (retries > 0) {
-        return geminiService._callAI(prompt, retries - 1);
-      }
-      return { 
-        text: '', 
-        error: error.message || 'AI service error' 
-      };
+  private abort() {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
     }
   }
-};
+
+  /**
+   * Specialized method for reassurance messages
+   */
+  async getReassurance(mood: string, reflection: string, lang: Language): Promise<GeminiResponse> {
+    if (!reflection.trim()) return { text: '', error: 'Reflection cannot be empty' };
+
+    this.abort();
+    this.abortController = new AbortController();
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `The user feels ${mood}. Their reflection: "${reflection}". Respond in ${this.getLangName(lang)}.`,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.7,
+        }
+      });
+
+      return { text: response.text || '' };
+    } catch (error: any) {
+      if (error.name === 'AbortError') return { text: '' };
+      console.error('Gemini Reassurance Error:', error);
+      return { text: '', error: 'I am here for you, even if the connection is slow. Take a deep breath.' };
+    }
+  }
+
+  /**
+   * General chat with real streaming
+   */
+  async sendMessage(
+    history: ChatMessage[],
+    message: string,
+    onToken?: (token: string) => void
+  ): Promise<GeminiResponse> {
+    if (!message.trim()) return { text: '', error: 'Message cannot be empty' };
+
+    this.abort();
+    this.abortController = new AbortController();
+
+    const chatHistory = history.map(m => ({
+      role: m.role,
+      parts: [{ text: m.content }]
+    }));
+
+    try {
+      // Create chat with system instruction
+      const chat = ai.chats.create({
+        model: "gemini-3-flash-preview",
+        history: chatHistory,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION
+        }
+      });
+
+      const result = await chat.sendMessageStream({ message });
+      
+      let fullText = '';
+      for await (const chunk of result) {
+        if (this.abortController?.signal.aborted) break;
+        const text = chunk.text;
+        if (text) {
+          fullText += text;
+          onToken?.(text);
+        }
+      }
+
+      return { text: fullText };
+    } catch (error: any) {
+      if (error.name === 'AbortError') return { text: '', error: 'Request cancelled' };
+      console.error('Gemini Chat Error:', error);
+      return { 
+        text: '', 
+        error: 'I lost connection for a moment. Please try sending that again.' 
+      };
+    } finally {
+      this.abortController = null;
+    }
+  }
+
+  private getLangName(lang: Language): string {
+    switch (lang) {
+      case 'hi': return 'Hindi';
+      case 'ur': return 'Urdu';
+      default: return 'English';
+    }
+  }
+}
+
+export const aiService = new GeminiService();
